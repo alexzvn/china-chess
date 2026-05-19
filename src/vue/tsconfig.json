@@ -1,12 +1,26 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
     "paths": {
       "@server/*": ["../server/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "src/**/*.vitest.ts",
+    "../../src/server/game/engine.ts",
+    "../../src/server/game/board.ts"
+  ],
   "vueCompilerOptions": {
     "target": 3.5
   }
