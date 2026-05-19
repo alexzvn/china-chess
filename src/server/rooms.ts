@@ -1,4 +1,6 @@
 import { nanoid } from "nanoid"
+import type { GameState } from "./game/engine"
+import { createInitialBoard } from "./game/board"
 
 export interface Room {
   roomId: string
@@ -6,6 +8,8 @@ export interface Room {
   playerA: string
   playerB: string | null
   status: "waiting" | "playing" | "finished"
+  gameState?: GameState
+  colors?: { a: "red" | "black"; b: "red" | "black" }
 }
 
 const rooms = new Map<string, Room>()
@@ -51,6 +55,12 @@ export function startGame(roomId: string): GameStartResult {
   if (Math.random() < 0.5) colors.reverse()
 
   room.status = "playing"
+  room.colors = { a: colors[0]!, b: colors[1]! }
+  room.gameState = {
+    board: createInitialBoard(),
+    turn: "red",
+    moveCount: 0,
+  }
 
   return {
     room,

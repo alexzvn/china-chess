@@ -1,18 +1,17 @@
 import { ref, computed } from "vue"
 import { getLegalMoves } from "@server/game/engine"
-import type { Position } from "@server/game/engine"
+import type { Position, Board } from "@server/game/engine"
 
-export type BoardCell = string | null
-export type BoardState = BoardCell[][]
+// BoardState is just Board from the engine (2D array of string | null)
+export type BoardState = Board
+export type { Position }
 
 function getPieceColor(piece: string): "red" | "black" {
   return piece.startsWith("r") ? "red" : "black"
 }
 
-/** Standard Chinese Chess starting board */
 export function createInitialBoard(): BoardState {
   const board: BoardState = Array.from({ length: 10 }, () => Array(9).fill(null))
-
   board[0] = ["b車", "b馬", "b象", "b士", "b將", "b士", "b象", "b馬", "b車"]
   board[2]![1] = "b砲"
   board[2]![7] = "b砲"
@@ -29,7 +28,6 @@ export function createInitialBoard(): BoardState {
   board[6]![4] = "r兵"
   board[6]![6] = "r兵"
   board[6]![8] = "r兵"
-
   return board
 }
 
@@ -45,13 +43,22 @@ export function useBoard() {
     return getLegalMoves(board.value, selectedPos.value)
   })
 
+  /** Set board from external source (server update) */
+  function setBoard(newBoard: BoardState) {
+    board.value = newBoard
+    clearSelection()
+  }
+
+  function setTurn(newTurn: "red" | "black") {
+    turn.value = newTurn
+    clearSelection()
+  }
+
   function selectPiece(pos: Position) {
     const piece = board.value[pos.rank]![pos.file]
     if (!piece) return false
-
     const color = getPieceColor(piece)
     if (color !== turn.value) return false
-
     selectedPos.value = pos
     return true
   }
@@ -72,32 +79,37 @@ export function useBoard() {
     return isLegalTarget(rank, file) && board.value[rank]![file] !== null
   }
 
-  function handleCellClick(rank: number, file: number) {
+  /**
+   * Handle a cell click. Returns a move action if the click was a legal move,
+   * or null if it was a select/deselect action.
+   */
+  function handleCellClick(
+    rank: number,
+    file: number,
+  ): { from: Position; to: Position } | null {
     const clickedPiece = board.value[rank]![file]
     const currentSelection = selectedPos.value
 
     if (currentSelection) {
-      // A piece is already selected
       if (isLegalTarget(rank, file)) {
-        // Legal move — will be handled by move execution (Issue #9)
-        // For now, just clear selection
+        // Legal move — return it to the caller
+        const move = { from: currentSelection, to: { rank, file } }
         clearSelection()
-        return
+        return move
       }
 
-      // Clicked own piece → switch selection
+      // Clicked own piece or empty → switch or deselect
       if (clickedPiece && getPieceColor(clickedPiece) === turn.value) {
         selectPiece({ rank, file })
-        return
+        return null
       }
 
-      // Clicked invalid target → deselect
       clearSelection()
-      return
+      return null
     }
 
-    // No selection — try to select own piece
     selectPiece({ rank, file })
+    return null
   }
 
   return {
@@ -105,6 +117,8 @@ export function useBoard() {
     turn,
     selectedPos,
     legalMoves,
+    setBoard,
+    setTurn,
     selectPiece,
     clearSelection,
     isSelected,

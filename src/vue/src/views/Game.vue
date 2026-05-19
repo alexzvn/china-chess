@@ -4,12 +4,13 @@ import { useRoute, useRouter } from "vue-router"
 import Board from "../components/Board.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 import { useBoard } from "../composables/useBoard"
+import type { BoardState } from "../composables/useBoard"
 
 const route = useRoute()
 const router = useRouter()
 const roomId = route.params.id as string
 
-const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick } = useBoard()
+const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, setBoard, setTurn } = useBoard()
 
 interface GameStartData {
   type: "gameStart"
@@ -33,6 +34,16 @@ const { status, send } = useWebSocket((data) => {
     myColor.value = msg.yourColor
   }
 
+  if (data.type === "boardUpdate") {
+    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number }
+    setBoard(msg.board)
+    setTurn(msg.turn)
+  }
+
+  if (data.type === "error") {
+    error.value = (data as { message: string }).message
+  }
+
   if (data.type === "error") {
     error.value = (data as { message: string }).message
   }
@@ -53,7 +64,10 @@ function backToLobby() {
 }
 
 function onCellClick(rank: number, file: number) {
-  handleCellClick(rank, file)
+  const move = handleCellClick(rank, file)
+  if (move && gameStarted.value) {
+    send({ action: "move", roomId, from: move.from, to: move.to })
+  }
 }
 </script>
 

@@ -8,7 +8,9 @@ import {
   joinRoom,
   startGame,
 } from "./rooms"
+import { makeMove } from "./game/engine"
 import type { ServerWebSocket } from "bun"
+import type { Position } from "./game/engine"
 
 const clientIds = new WeakMap<object, string>()
 const clientConnections = new Map<string, object>()
@@ -114,7 +116,6 @@ export function createApp() {
           }
           readyConfirmations.get(roomId)!.add(myClientId)
 
-          // Check if both players have confirmed
           const bothReady =
             room.playerB !== null &&
             readyConfirmations.get(roomId)!.has(room.playerA) &&
@@ -140,6 +141,55 @@ export function createApp() {
 
             broadcastLobbyUpdate()
           }
+          return
+        }
+
+        if (action === "move" && myClientId) {
+          const roomId = data.roomId as string
+          const from = data.from as Position
+          const to = data.to as Position
+          const room = getRoom(roomId)
+
+          if (!room || room.status !== "playing" || !room.gameState) {
+            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Game not active" }))
+            return
+          }
+
+          // Check client is a player in this room
+          if (room.playerA !== myClientId && room.playerB !== myClientId) {
+            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Not your game" }))
+            return
+          }
+
+          // Determine client's color
+          const isPlayerA = room.playerA === myClientId
+          const myColor = isPlayerA ? room.colors!.a : room.colors!.b
+
+          // Check turn
+          if (room.gameState.turn !== myColor) {
+            ws.send(JSON.stringify({ type: "error", code: "NOT_YOUR_TURN", message: "Not your turn" }))
+            return
+          }
+
+          // Validate and apply move
+          const result = makeMove(room.gameState, from, to)
+          if (!result) {
+            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Illegal move" }))
+            return
+          }
+
+          room.gameState = result
+
+          // Broadcast updated board to both players
+          const update = {
+            type: "boardUpdate",
+            board: result.board,
+            turn: result.turn,
+            moveCount: result.moveCount,
+            lastMove: { from, to },
+          }
+          sendToClient(room.playerA, update)
+          sendToClient(room.playerB!, update)
           return
         }
       },
