@@ -1,6 +1,12 @@
 # dependencies (bun install)
 node_modules
 
+# turbo
+.turbo/
+
+# build output (Vite builds to public/)
+public/
+
 # output
 out
 dist
