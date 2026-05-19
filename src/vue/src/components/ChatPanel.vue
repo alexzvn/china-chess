@@ -47,34 +47,34 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col border border-gray-300 rounded-lg bg-white overflow-hidden" style="width: 240px; height: 100%; min-height: 300px">
-    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-2 border-b border-gray-200 bg-gray-50">
+  <div class="flex flex-col border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 overflow-hidden" style="width: 240px; height: 100%; min-height: 300px">
+    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
       Chat
     </div>
     <div ref="listRef" class="flex-1 overflow-y-auto p-2 space-y-1">
       <div v-for="(msg, i) in messages" :key="i" class="text-sm">
-        <span class="font-medium" :class="msg.color === 'red' ? 'text-red-600' : 'text-gray-800'">
+        <span class="font-medium" :class="msg.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'">
           {{ msg.color === "red" ? "Red" : "Black" }}:
         </span>
-        <span class="text-gray-700 ml-1">{{ msg.text }}</span>
+        <span class="text-gray-700 dark:text-gray-300 ml-1">{{ msg.text }}</span>
       </div>
-      <div v-if="messages.length === 0" class="text-xs text-gray-400 text-center py-4">
+      <div v-if="messages.length === 0" class="text-xs text-gray-400 dark:text-gray-500 text-center py-4">
         No messages yet
       </div>
     </div>
-    <div class="border-t border-gray-200 p-2 flex gap-1">
+    <div class="border-t border-gray-200 dark:border-gray-700 p-2 flex gap-1">
       <input
         v-model="input"
         type="text"
         placeholder="Type a message..."
         :disabled="disabled"
-        class="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-400 disabled:opacity-50"
+        class="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 disabled:opacity-50"
         @keydown="onKeydown"
       />
       <button
         @click="send"
         :disabled="disabled || !input.trim()"
-        class="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        class="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 transition-colors"
       >
         Send
       </button>

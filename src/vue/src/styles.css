@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+@variant dark (&:is(.dark *));
+
+/* Smooth theme transitions */
+*,
+*::before,
+*::after {
+  transition-property: background-color, color, border-color;
+  transition-duration: 300ms;
+  transition-timing-function: ease;
+}

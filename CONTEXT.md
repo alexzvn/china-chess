@@ -28,6 +28,31 @@ A full-stack online multiplayer Chinese Chess (象棋/中国象棋) game. Two pl
 - **Ready state:** A toggleable boolean indicating a player is prepared to start the game. Toggled via `toggleReady` client action. The game transitions from `waiting` to `playing` only when both players are ready. Ready can be toggled off (un-ready).
 - **roomUpdate:** Server → client message containing the current player list and their ready states. Sent on room creation, player join, ready toggle, and reconnection.
 - **Board flip:** The board renders 180° rotated when the player is assigned Black. Both ranks and files are mirrored (`9 - rank`, `8 - file`) so Black's pieces appear at the bottom. This is a pure rendering concern — engine coordinates remain 0-indexed regardless of flip.
+- **Host:** The player who created the room (`playerA`). Only the host can kick the opponent and delete the room by leaving.
+- **Kick:** The host removes the opponent (`playerB`) from the room. The room resets to `waiting`, `playerB` becomes `null`, ready states and game state are cleared. The room stays in the lobby for new players. The kicked player receives a `kicked` message and is sent to the lobby.
+- **Game-over state:** The transient phase after a game ends (`finished` status) and before a rematch decision is made. Both players see a countdown timer, a "Rematch" button, and a "Back to Lobby" button. The room resets to `waiting` only when both players have entered the rematch state.
+- **Rematch:** Either player initiates by clicking "Rematch" during the game-over state. The room resets to `waiting` only when both players have accepted. Both players return to pre-game mode and must toggle ready again. Colors are re-randomized.
+- **Countdown:** A timer displayed during the game-over state. If neither player acts before the countdown expires, both players auto-enter the rematch state and the room resets to `waiting`.
+
+## Relationships
+
+- A **Room** has exactly one **Host** (`playerA`) and zero or one opponent (`playerB`).
+- The **Host** can **Kick** the opponent, which resets the **Room** to `waiting`.
+- A **Game-over state** follows a completed game and precedes a **Rematch** decision.
+- A **Rematch** resets the **Room** to `waiting` only after both players accept.
+- A **Countdown** runs during the **Game-over state** and triggers auto-rematch if it expires.
+- If the **Host** leaves a **Room**, the **Room** is deleted. If only the opponent leaves, the **Room** stays with the **Host**.
+
+## Example dialogue
+
+> **Dev:** "When the **Host** **Kick**s the opponent, does the **Room** go to `finished` or `waiting`?"
+> **Domain expert:** "`waiting`. The **Room** stays in the lobby so a new player can join."
+>
+> **Dev:** "Can one player start a **Rematch** alone, or do both have to agree?"
+> **Domain expert:** "Both must agree — either by clicking or by the **Countdown** expiring for both."
+>
+> **Dev:** "What happens if the **Host** leaves during the **Game-over state**?"
+> **Domain expert:** "The **Room** is deleted entirely."
 
 ## Architecture Overview
 
@@ -36,10 +61,11 @@ chess/
   src/
     server/
       types.ts        — Board, Piece, Move, Room, GameState types
-      game.ts         — Chinese Chess engine (move validation, check, checkmate)
+      game/           — Chinese Chess engine (move validation, check, checkmate)
+        engine.ts     — Move validation, check/checkmate/stalemate detection
+        board.ts      — Board representation and initial position
       rooms.ts        — Room lifecycle, lobby state
-      ws.ts           — WebSocket server, message routing
-      index.ts        — Entry point, Elysia app setup
+      index.ts        — Entry point, Elysia app setup, WebSocket message routing
     vue/
       components/
         Board.vue       — Chess board grid rendering
@@ -73,9 +99,10 @@ chess/
 
 ## Key File Locations
 
-- Game engine: `src/server/game.ts`
+- Game engine: `src/server/game/engine.ts`
+- Board representation: `src/server/game/board.ts`
 - Room management: `src/server/rooms.ts`
-- WebSocket handler: `src/server/ws.ts`
+- WebSocket handler: `src/server/index.ts`
 - Server entry: `src/server/index.ts`
 - Vue components: `src/vue/components/`
 - Vue views: `src/vue/views/`

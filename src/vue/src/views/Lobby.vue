@@ -2,6 +2,7 @@
 import { ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import RoomCard from "../components/RoomCard.vue"
+import ThemeDropdown from "../components/ThemeDropdown.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 
 interface RoomInfo {
@@ -49,21 +50,12 @@ function joinRoom(roomId: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-4 md:p-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8">
     <div class="max-w-2xl mx-auto">
       <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-800">Chinese Chess</h1>
-          <p
-            class="text-sm mt-1"
-            :class="{
-              'text-green-600': status === 'connected',
-              'text-yellow-600': status === 'connecting',
-              'text-red-600': status === 'error' || status === 'disconnected',
-            }"
-          >
-            {{ status === "connected" ? `Connected: ${clientId}` : status === "connecting" ? "Connecting..." : "Disconnected" }}
-          </p>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Chinese Chess</h1>
+          <ThemeDropdown />
         </div>
         <button
           @click="createRoom"
@@ -74,7 +66,7 @@ function joinRoom(roomId: string) {
         </button>
       </div>
 
-      <div v-if="rooms.length === 0" class="text-center py-12 text-gray-400">
+      <div v-if="rooms.length === 0" class="text-center py-12 text-gray-400 dark:text-gray-500">
         <p class="text-lg">No open rooms</p>
         <p class="text-sm mt-1">Create one to start playing!</p>
       </div>

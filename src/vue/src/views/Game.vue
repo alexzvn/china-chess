@@ -3,6 +3,7 @@ import { shallowRef, ref, computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import Board from "../components/Board.vue"
 import SidePanel from "../components/SidePanel.vue"
+import ThemeDropdown from "../components/ThemeDropdown.vue"
 import type { RoomPlayer } from "../components/SidePanel.vue"
 import type { ChatMessage } from "../components/ChatPanel.vue"
 import { useWebSocket } from "../composables/useWebSocket"
@@ -170,21 +171,22 @@ function declineDraw() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-2 md:p-4">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-950 p-2 md:p-4">
     <!-- Error state -->
     <div v-if="error && !gameStarted && players.length === 0" class="max-w-md mx-auto text-center">
-      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-        <p class="text-red-700">{{ error }}</p>
-        <button @click="backToLobby" class="mt-3 text-sm text-blue-600 hover:underline">Back to Lobby</button>
+      <div class="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+        <p class="text-red-700 dark:text-red-300">{{ error }}</p>
+        <button @click="backToLobby" class="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline">Back to Lobby</button>
       </div>
     </div>
 
     <template v-else>
       <!-- Room header -->
-      <div class="text-center mb-3">
-        <h1 class="text-lg font-bold text-gray-800">
+      <div class="flex items-center justify-between mb-3 px-2">
+        <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">
           Room: <span class="font-mono text-sm">{{ roomId }}</span>
         </h1>
+        <ThemeDropdown />
       </div>
 
       <!-- Board + Side Panel layout -->
