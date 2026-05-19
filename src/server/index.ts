@@ -86,6 +86,33 @@ export function createApp() {
           return
         }
 
+        if (action === "rejoinRoom" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (room && room.gameState && (room.playerA === myClientId || room.playerB === myClientId)) {
+            // Reconnected — send current game state
+            const isPlayerA = room.playerA === myClientId
+            const color = isPlayerA ? room.colors!.a : room.colors!.b
+            sendToClient(myClientId, {
+              type: "gameStart",
+              yourColor: color,
+              roomId,
+              opponentId: isPlayerA ? room.playerB : room.playerA,
+            })
+            sendToClient(myClientId, {
+              type: "boardUpdate",
+              board: room.gameState.board,
+              turn: room.gameState.turn,
+              moveCount: room.gameState.moveCount,
+              inCheck: false,
+            })
+            // Notify opponent of reconnection
+            const opponentId = isPlayerA ? room.playerB! : room.playerA
+            sendToClient(opponentId, { type: "opponentReconnected" })
+          }
+          return
+        }
+
         if (action === "joinRoom" && myClientId) {
           const roomId = data.roomId as string
           try {

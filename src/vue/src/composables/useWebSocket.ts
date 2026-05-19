@@ -4,6 +4,8 @@ export function useWebSocket(onMessage?: (data: Record<string, unknown>) => void
   const clientId = shallowRef<string | null>(null)
   const status = shallowRef<"connecting" | "connected" | "disconnected" | "error">("connecting")
   let ws: WebSocket | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectAttempts = 0
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
   const host = import.meta.env.DEV ? "localhost:3000" : window.location.host
@@ -14,6 +16,7 @@ export function useWebSocket(onMessage?: (data: Record<string, unknown>) => void
 
     ws.onopen = () => {
       status.value = "connected"
+      reconnectAttempts = 0
     }
 
     ws.onmessage = (e: MessageEvent) => {
@@ -26,12 +29,26 @@ export function useWebSocket(onMessage?: (data: Record<string, unknown>) => void
 
     ws.onclose = () => {
       status.value = "disconnected"
+      scheduleReconnect()
     }
 
     ws.onerror = () => {
       status.value = "error"
     }
   }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return
+    reconnectAttempts++
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      if (status.value === "disconnected" || status.value === "error") {
+        connect()
+      }
+    }, 3000)
+  }
+
+  let storedClientId: string | null = null
 
   function send(payload: Record<string, unknown>) {
     if (ws?.readyState === WebSocket.OPEN) {
@@ -40,6 +57,10 @@ export function useWebSocket(onMessage?: (data: Record<string, unknown>) => void
   }
 
   function disconnect() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     ws?.close()
     ws = null
   }

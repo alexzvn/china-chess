@@ -7,6 +7,7 @@ import ChatPanel from "../components/ChatPanel.vue"
 import type { ChatMessage } from "../components/ChatPanel.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 import { useBoard } from "../composables/useBoard"
+import { useSound } from "../composables/useSound"
 import type { BoardState } from "../composables/useBoard"
 
 const route = useRoute()
@@ -25,7 +26,9 @@ const chatMessages = ref<ChatMessage[]>([])
 const drawOffered = shallowRef(false)
 const pendingDrawOffer = shallowRef(false)
 
-const { status, send } = useWebSocket((data) => {
+const { playSound } = useSound()
+
+const { clientId, status, send } = useWebSocket((data) => {
   if (data.type === "roomJoined") {
     joined.value = true
   }
@@ -37,10 +40,19 @@ const { status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "boardUpdate") {
-    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number; inCheck?: boolean }
+    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number; inCheck?: boolean; lastMove?: { from: Record<string, number>; to: Record<string, number> } }
     setBoard(msg.board)
     setTurn(msg.turn)
     setInCheck(msg.inCheck ? msg.turn : null)
+    // Sound effects
+    if (msg.inCheck) {
+      playSound("check")
+    } else if (msg.lastMove && msg.board[msg.lastMove.to.rank]?.[msg.lastMove.to.file] !== msg.board[msg.lastMove.from.rank]?.[msg.lastMove.from.file]) {
+      // Rough capture detection
+      playSound("capture")
+    } else {
+      playSound("move")
+    }
   }
 
   if (data.type === "gameEnd") {
@@ -69,7 +81,11 @@ const { status, send } = useWebSocket((data) => {
 
 watch(status, (s) => {
   if (s === "connected" && roomId) {
-    send({ action: "joinRoom", roomId })
+    if (clientId.value) {
+      send({ action: "rejoinRoom", roomId, clientId: clientId.value })
+    } else {
+      send({ action: "joinRoom", roomId })
+    }
   }
 })
 
