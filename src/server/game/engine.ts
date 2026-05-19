@@ -174,3 +174,160 @@ export function isValidMove(
       return false
   }
 }
+
+export interface GameState {
+  board: Board
+  turn: "red" | "black"
+  moveCount: number
+}
+
+/** Deep-clone a board */
+function cloneBoard(board: Board): Board {
+  return board.map((row) => [...row])
+}
+
+/** Find the king position for a given color */
+function findKing(board: Board, color: "red" | "black"): Position | null {
+  const prefix = color === "red" ? "r" : "b"
+  const kingChars = color === "red" ? ["帥"] : ["將"]
+  for (let r = 0; r < 10; r++) {
+    for (let f = 0; f < 9; f++) {
+      const piece = board[r]![f]
+      if (piece && kingChars.includes(piece.slice(1)) && piece.startsWith(prefix)) {
+        return { rank: r, file: f }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Check if the king of the given color is in check.
+ * Scans all enemy pieces to see if any can attack the king.
+ */
+export function isInCheck(board: Board, color: "red" | "black"): boolean {
+  const kingPos = findKing(board, color)
+  if (!kingPos) return false
+
+  const enemyPrefix = color === "red" ? "b" : "r"
+
+  // Check every enemy piece
+  for (let r = 0; r < 10; r++) {
+    for (let f = 0; f < 9; f++) {
+      const piece = board[r]![f]
+      if (!piece || !piece.startsWith(enemyPrefix)) continue
+      if (isValidMove(piece, { rank: r, file: f }, kingPos, board)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
+ * Get all legal destination positions for a piece at `pos`.
+ * Filters out moves that would leave the moving player's own king in check.
+ */
+export function getLegalMoves(board: Board, pos: Position): Position[] {
+  const piece = getPiece(board, pos)
+  if (!piece) return []
+
+  const color = piece.startsWith("r") ? "red" : "black"
+  const type = piece.slice(1)
+  const results: Position[] = []
+
+  // For sliding pieces (車, 炮), we need to check all possible destinations
+  // For other pieces, we check specific offsets
+  for (let r = 0; r < 10; r++) {
+    for (let f = 0; f < 9; f++) {
+      const to: Position = { rank: r, file: f }
+      if (!isValidMove(piece, pos, to, board)) continue
+
+      // Simulate the move
+      const sim = cloneBoard(board)
+      sim[r]![f] = sim[pos.rank]![pos.file]
+      sim[pos.rank]![pos.file] = null
+
+      // Check if own king would be in check
+      if (!isInCheck(sim, color)) {
+        results.push(to)
+      }
+    }
+  }
+
+  return results
+}
+
+/**
+ * Check if the given color is in checkmate.
+ * In Chinese Chess: checkmate = king in check AND no legal moves for any piece.
+ */
+export function isCheckmate(board: Board, color: "red" | "black"): boolean {
+  if (!isInCheck(board, color)) return false
+
+  const prefix = color === "red" ? "r" : "b"
+  for (let r = 0; r < 10; r++) {
+    for (let f = 0; f < 9; f++) {
+      const piece = board[r]![f]
+      if (!piece || !piece.startsWith(prefix)) continue
+      if (getLegalMoves(board, { rank: r, file: f }).length > 0) return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Check if the given color is in stalemate.
+ * In Chinese Chess: stalemate = NOT in check BUT no legal moves for any piece.
+ * Crucially, in Chinese Chess, stalemate is a LOSS for the side with no moves.
+ */
+export function isStalemate(board: Board, color: "red" | "black"): boolean {
+  if (isInCheck(board, color)) return false
+
+  const prefix = color === "red" ? "r" : "b"
+  for (let r = 0; r < 10; r++) {
+    for (let f = 0; f < 9; f++) {
+      const piece = board[r]![f]
+      if (!piece || !piece.startsWith(prefix)) continue
+      if (getLegalMoves(board, { rank: r, file: f }).length > 0) return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Apply a move to the game state.
+ * Validates the move, checks turn, checks self-check.
+ * Returns the new GameState or null if the move is illegal.
+ */
+export function makeMove(
+  state: GameState,
+  from: Position,
+  to: Position,
+): GameState | null {
+  const piece = getPiece(state.board, from)
+  if (!piece) return null
+
+  // Check turn
+  const pieceColor = piece.startsWith("r") ? "red" : "black"
+  if (pieceColor !== state.turn) return null
+
+  // Validate the move (including self-check constraint via getLegalMoves)
+  const legalMoves = getLegalMoves(state.board, from)
+  const isValid = legalMoves.some((m) => m.rank === to.rank && m.file === to.file)
+  if (!isValid) return null
+
+  // Apply the move
+  const newBoard = cloneBoard(state.board)
+  newBoard[to.rank]![to.file] = newBoard[from.rank]![from.file]
+  newBoard[from.rank]![from.file] = null
+
+  return {
+    board: newBoard,
+    turn: state.turn === "red" ? "black" : "red",
+    moveCount: state.moveCount + 1,
+  }
+}
