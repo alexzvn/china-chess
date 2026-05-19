@@ -84,8 +84,8 @@ watch([status, clientId], ([s, cid]) => {
       // Came from Lobby after creating room — reclaim our original player slot
       send({ action: "reclaimRoom", roomId, originalClientId })
     } else {
-      // Fresh join or rejoin from bookmark — try rejoining existing game or joining
-      send({ action: "rejoinRoom", roomId, clientId: cid })
+      // Fresh join from lobby click or bookmark — join as playerB or reconnect if game active
+      send({ action: "joinRoom", roomId })
     }
   }
 })
