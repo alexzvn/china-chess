@@ -17,6 +17,7 @@ const props = defineProps<{
   gameResult?: string
   chatMessages: ChatMessage[]
   chatDisabled: boolean
+  countdownRemaining?: number
 }>()
 
 const emit = defineEmits<{
@@ -149,6 +150,9 @@ function hasOpponent(): boolean {
       <!-- Game over banner -->
       <div v-if="mode === 'game-over'" class="bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-100 px-4 py-3 rounded-lg text-center">
         <p class="text-sm font-bold">{{ gameResult }}</p>
+        <div v-if="countdownRemaining !== undefined && countdownRemaining > 0" class="mt-1 text-xs text-gray-300 dark:text-gray-400">
+          New game in <span class="font-mono font-bold">{{ String(Math.floor(countdownRemaining / 60)).padStart(2, '0') }}:{{ String(countdownRemaining % 60).padStart(2, '0') }}</span>
+        </div>
         <div class="mt-2 flex gap-2 justify-center">
           <button @click="emit('rematch')" class="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 dark:hover:bg-green-800 transition-colors">
             Rematch

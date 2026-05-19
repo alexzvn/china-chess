@@ -405,6 +405,7 @@ export function createApp() {
               result: winner.result,
               winnerColor: winner.winnerColor,
               reason: `Checkmate! ${winner.winnerColor === "red" ? "Red" : "Black"} wins`,
+              expiresAt: Date.now() + 30000,
             }
             sendToClient(room.playerA, endMsg)
             sendToClient(room.playerB!, endMsg)
@@ -428,6 +429,7 @@ export function createApp() {
             result: "resign",
             winnerColor,
             reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`,
+            expiresAt: Date.now() + 30000,
           }
           sendToClient(room.playerA, endMsg)
           sendToClient(room.playerB!, endMsg)
@@ -449,7 +451,7 @@ export function createApp() {
           const room = getRoom(roomId)
           if (!room || room.status !== "playing") return
           room.status = "finished"
-          const endMsg = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw" }
+          const endMsg = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
           sendToClient(room.playerA, endMsg)
           sendToClient(room.playerB!, endMsg)
           broadcastLobbyUpdate()

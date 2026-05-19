@@ -28,6 +28,9 @@ const players = ref<RoomPlayer[]>([])
 const chatMessages = ref<ChatMessage[]>([])
 const drawOffered = shallowRef(false)
 const pendingDrawOffer = shallowRef(false)
+const countdownExpiresAt = shallowRef<number | null>(null)
+const countdownRemaining = shallowRef(0)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const { playSound } = useSound()
 
@@ -71,9 +74,29 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "gameEnd") {
-    const msg = data as { result: string; winnerColor: string | null; reason: string }
+    const msg = data as { result: string; winnerColor: string | null; reason: string; expiresAt?: number }
     gameOver.value = true
     gameResult.value = msg.reason
+    if (msg.expiresAt) {
+      countdownExpiresAt.value = msg.expiresAt
+      countdownRemaining.value = Math.max(0, Math.ceil((msg.expiresAt - Date.now()) / 1000))
+      if (countdownTimer) clearInterval(countdownTimer)
+      countdownTimer = setInterval(() => {
+        if (countdownExpiresAt.value && Date.now() >= countdownExpiresAt.value) {
+          clearInterval(countdownTimer!)
+          countdownTimer = null
+          countdownRemaining.value = 0
+          // Auto-rematch
+          if (!gameStarted.value && !gameOver.value) {
+            // Game state was already reset, don't rematch
+          } else if (gameOver.value) {
+            rematch()
+          }
+        } else {
+          countdownRemaining.value = Math.max(0, Math.ceil((countdownExpiresAt.value! - Date.now()) / 1000))
+        }
+      }, 1000)
+    }
   }
 
   if (data.type === "chat") {
@@ -108,6 +131,7 @@ const { clientId, status, send } = useWebSocket((data) => {
       gameStarted.value = false
       myColor.value = null
       setBoard(createInitialBoard())
+      clearCountdown()
     }
   }
 })
@@ -160,6 +184,7 @@ function toggleReady() {
 
 function backToLobby() {
   send({ action: "leaveRoom" })
+  clearCountdown()
   router.push("/")
 }
 
@@ -169,6 +194,21 @@ function kick() {
 
 function rematch() {
   send({ action: "rematch", roomId })
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  countdownExpiresAt.value = null
+  countdownRemaining.value = 0
+}
+
+function clearCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  countdownExpiresAt.value = null
+  countdownRemaining.value = 0
 }
 
 function sendChat(text: string) {
@@ -243,6 +283,7 @@ function declineDraw() {
           :game-result="gameResult"
           :chat-messages="chatMessages"
           :chat-disabled="gameOver"
+          :countdown-remaining="countdownRemaining"
           @toggle-ready="toggleReady"
           @send-chat="sendChat"
           @resign="resign"
