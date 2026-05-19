@@ -71,4 +71,58 @@ describe("WebSocket /ws", () => {
     ws1.close()
     ws2.close()
   })
+
+  it("kickPlayer resets room and notifies both players", async () => {
+    const hostWs = new WebSocket(`ws://localhost:${port}/ws`)
+    const guestWs = new WebSocket(`ws://localhost:${port}/ws`)
+
+    const [hostRaw, guestRaw] = await Promise.all([
+      nextMessage(hostWs),
+      nextMessage(guestWs),
+    ])
+    const hostMsg = JSON.parse(hostRaw)
+    const guestMsg = JSON.parse(guestRaw)
+    const hostId = hostMsg.clientId
+    const guestId = guestMsg.clientId
+
+    // Host creates room
+    hostWs.send(JSON.stringify({ action: "createRoom" }))
+    let created = await nextMessage(hostWs, (m) => {
+      const p = JSON.parse(m)
+      return p.type === "roomCreated"
+    })
+    const roomId = JSON.parse(created).roomId
+
+    // Guest joins room
+    guestWs.send(JSON.stringify({ action: "joinRoom", roomId }))
+    await nextMessage(guestWs, (m) => {
+      const p = JSON.parse(m)
+      return p.type === "roomUpdate"
+    })
+
+    // Host kicks guest
+    hostWs.send(JSON.stringify({ action: "kickPlayer", roomId }))
+
+    // Guest receives kicked message
+    const kickedRaw = await nextMessage(guestWs, (m) => {
+      const p = JSON.parse(m)
+      return p.type === "kicked"
+    })
+    const kickedMsg = JSON.parse(kickedRaw)
+    expect(kickedMsg.type).toBe("kicked")
+
+    // Host receives roomUpdate with only themselves
+    const hostUpdateRaw = await nextMessage(hostWs, (m) => {
+      const p = JSON.parse(m)
+      return p.type === "roomUpdate"
+    })
+    const hostUpdate = JSON.parse(hostUpdateRaw)
+    expect(hostUpdate.type).toBe("roomUpdate")
+    expect(hostUpdate.players.length).toBe(1)
+    expect(hostUpdate.players[0].clientId).toBe(hostId)
+    expect(hostUpdate.roomStatus).toBe("waiting")
+
+    hostWs.close()
+    guestWs.close()
+  })
 })

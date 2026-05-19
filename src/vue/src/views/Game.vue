@@ -92,6 +92,13 @@ const { clientId, status, send } = useWebSocket((data) => {
   if (data.type === "error") {
     error.value = (data as { message: string }).message
   }
+
+  if (data.type === "kicked") {
+    error.value = (data as { reason: string }).reason
+    players.value = []
+    gameStarted.value = false
+    gameOver.value = false
+  }
 })
 
 function createInitialBoard(): BoardState {
@@ -143,6 +150,10 @@ function toggleReady() {
 function backToLobby() {
   send({ action: "leaveRoom" })
   router.push("/")
+}
+
+function kick() {
+  send({ action: "kickPlayer", roomId })
 }
 
 function sendChat(text: string) {
@@ -222,6 +233,7 @@ function declineDraw() {
           @resign="resign"
           @offer-draw="offerDraw"
           @back-to-lobby="backToLobby"
+          @kick="kick"
         />
       </div>
 

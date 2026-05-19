@@ -27,11 +27,20 @@ const emit = defineEmits<{
   acceptDraw: []
   declineDraw: []
   backToLobby: []
+  kick: []
 }>()
 
 function playerLabel(clientId: string): string {
   if (clientId === props.myClientId) return "You"
   return `Player ${clientId.slice(0, 5)}`
+}
+
+function isHost(): boolean {
+  return props.players.length > 0 && props.players[0]!.clientId === props.myClientId
+}
+
+function hasOpponent(): boolean {
+  return props.players.length >= 2
 }
 </script>
 
@@ -52,12 +61,21 @@ function playerLabel(clientId: string): string {
             <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
               {{ playerLabel(p.clientId) }}
             </span>
-            <span
-              class="text-xs px-2 py-0.5 rounded-full font-semibold"
-              :class="p.ready ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
-            >
-              {{ p.ready ? "Ready ✓" : "Not Ready" }}
-            </span>
+            <div class="flex items-center gap-2">
+              <span
+                class="text-xs px-2 py-0.5 rounded-full font-semibold"
+                :class="p.ready ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+              >
+                {{ p.ready ? "Ready ✓" : "Not Ready" }}
+              </span>
+              <button
+                v-if="isHost() && !p.ready && p.clientId !== myClientId"
+                @click="emit('kick')"
+                class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+              >
+                Kick
+              </button>
+            </div>
           </div>
           <!-- Placeholder if waiting for opponent -->
           <div v-if="players.length < 2" class="flex items-center justify-between py-1">

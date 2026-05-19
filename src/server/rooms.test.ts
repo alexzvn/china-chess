@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { createRoom, getRoom, getLobbyRooms, joinRoom, startGame, toggleReady } from "./rooms"
+import { createRoom, getRoom, getLobbyRooms, joinRoom, startGame, toggleReady, kickPlayer } from "./rooms"
 
 describe("Rooms", () => {
   it("creates a room with waiting status and the creator as playerA", () => {
@@ -162,6 +162,41 @@ describe("Rooms", () => {
 
     it("throws if room not found", () => {
       expect(() => toggleReady("nonexistent", "client-a")).toThrow("Room not found")
+    })
+  })
+
+  describe("kickPlayer", () => {
+    it("resets room to waiting when host kicks playerB", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      toggleReady(room.roomId, "client-a")
+      toggleReady(room.roomId, "client-b")
+
+      kickPlayer(room.roomId, "client-a")
+      const updated = getRoom(room.roomId)!
+
+      expect(updated.status).toBe("waiting")
+      expect(updated.playerB).toBeNull()
+      expect(updated.playerA).toBe("client-a")
+      expect(updated.playerAReady).toBe(false)
+      expect(updated.playerBReady).toBe(false)
+      expect(updated.gameState).toBeUndefined()
+      expect(updated.colors).toBeUndefined()
+    })
+
+    it("throws if non-host tries to kick", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      expect(() => kickPlayer(room.roomId, "client-b")).toThrow("Only the host can kick")
+    })
+
+    it("throws if no player to kick", () => {
+      const room = createRoom("client-a")
+      expect(() => kickPlayer(room.roomId, "client-a")).toThrow("No player to kick")
+    })
+
+    it("throws if room not found", () => {
+      expect(() => kickPlayer("nonexistent", "client-a")).toThrow("Room not found")
     })
   })
 })

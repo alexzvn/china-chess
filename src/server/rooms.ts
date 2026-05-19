@@ -105,3 +105,19 @@ export function startGame(roomId: string): GameStartResult {
 export function getLobbyRooms(): Room[] {
   return Array.from(rooms.values()).filter((r) => r.status === "waiting")
 }
+
+export function kickPlayer(roomId: string, kickerId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  if (kickerId !== room.playerA) throw new Error("Only the host can kick")
+  if (!room.playerB) throw new Error("No player to kick")
+
+  room.playerB = null
+  room.playerAReady = false
+  room.playerBReady = false
+  room.status = "waiting"
+  delete room.gameState
+  delete room.colors
+
+  return room
+}

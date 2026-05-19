@@ -8,6 +8,7 @@ import {
   getRoom,
   joinRoom,
   toggleReady,
+  kickPlayer,
 } from "./rooms"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "./game/engine"
 import type { ServerWebSocket } from "bun"
@@ -176,6 +177,35 @@ export function createApp() {
           try {
             joinRoom(roomId, myClientId)
             broadcastRoomUpdate(roomId)
+            broadcastLobbyUpdate()
+          } catch (e) {
+            ws.send(JSON.stringify({
+              type: "error",
+              message: (e as Error).message,
+            }))
+          }
+          return
+        }
+
+        if (action === "kickPlayer" && myClientId) {
+          const roomId = data.roomId as string
+          try {
+            const room = getRoom(roomId)
+            if (!room) throw new Error("Room not found")
+            if (myClientId !== room.playerA) throw new Error("Only the host can kick")
+            if (!room.playerB) throw new Error("No player to kick")
+
+            const kickedId = room.playerB
+            kickPlayer(roomId, myClientId)
+
+            // Notify kicked player
+            sendToClient(kickedId, { type: "kicked", reason: "You were kicked by the host" })
+            // Notify remaining player
+            sendToClient(room.playerA, {
+              type: "roomUpdate",
+              players: [{ clientId: room.playerA, ready: false }],
+              roomStatus: "waiting",
+            })
             broadcastLobbyUpdate()
           } catch (e) {
             ws.send(JSON.stringify({
