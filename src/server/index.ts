@@ -1,5 +1,6 @@
 import { Elysia } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
+import { readFileSync, existsSync } from "fs"
 import { nanoid } from "nanoid"
 import {
   createRoom,
@@ -42,10 +43,28 @@ function broadcastLobbyUpdate() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let app: any = null
 
+function serveIndex(): Response {
+  if (existsSync("./public/index.html")) {
+    const html = readFileSync("./public/index.html", "utf-8")
+    return new Response(html, {
+      headers: { "Content-Type": "text/html" },
+    })
+  }
+  return new Response("Chinese Chess Server")
+}
+
 export function createApp() {
   app = new Elysia()
-    .get("/", () => "Chinese Chess Server")
-    .use(staticPlugin({ assets: "./public" }))
+    .get("/", () => serveIndex())
+    .use(staticPlugin({ assets: "./public", prefix: "/", alwaysStatic: true }))
+    .get("/*", ({ request }) => {
+      // SPA fallback — only for non-file paths
+      const url = new URL(request.url)
+      if (!url.pathname.includes(".")) {
+        return serveIndex()
+      }
+      return new Response("Not found", { status: 404 })
+    })
     .ws("/ws", {
       open(ws) {
         const clientId = nanoid(7)
