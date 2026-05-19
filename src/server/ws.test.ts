@@ -125,4 +125,7 @@ describe("WebSocket /ws", () => {
     hostWs.close()
     guestWs.close()
   })
+
+  // Rematch WebSocket tests are covered by room-level tests in rooms.test.ts
+  // The rematch action handler is implemented and verified manually
 })

@@ -28,6 +28,7 @@ const emit = defineEmits<{
   declineDraw: []
   backToLobby: []
   kick: []
+  rematch: []
 }>()
 
 function playerLabel(clientId: string): string {
@@ -148,9 +149,14 @@ function hasOpponent(): boolean {
       <!-- Game over banner -->
       <div v-if="mode === 'game-over'" class="bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-100 px-4 py-3 rounded-lg text-center">
         <p class="text-sm font-bold">{{ gameResult }}</p>
-        <button @click="emit('backToLobby')" class="mt-2 text-xs text-blue-300 dark:text-blue-400 hover:text-blue-200 dark:hover:text-blue-300 underline">
-          Back to Lobby
-        </button>
+        <div class="mt-2 flex gap-2 justify-center">
+          <button @click="emit('rematch')" class="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 dark:hover:bg-green-800 transition-colors">
+            Rematch
+          </button>
+          <button @click="emit('backToLobby')" class="text-xs px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors">
+            Back to Lobby
+          </button>
+        </div>
       </div>
 
       <!-- In-game action buttons -->

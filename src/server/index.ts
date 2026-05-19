@@ -9,6 +9,7 @@ import {
   joinRoom,
   toggleReady,
   kickPlayer,
+  rematch,
 } from "./rooms"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "./game/engine"
 import type { ServerWebSocket } from "bun"
@@ -212,6 +213,99 @@ export function createApp() {
               type: "error",
               message: (e as Error).message,
             }))
+          }
+          return
+        }
+
+        if (action === "rematch" && myClientId) {
+          const roomId = data.roomId as string
+          try {
+            const room = getRoom(roomId)
+            if (!room) throw new Error("Room not found")
+            if (room.status !== "finished") throw new Error("Game not finished")
+            if (room.playerA !== myClientId && room.playerB !== myClientId) throw new Error("Client not in room")
+
+            const result = rematch(roomId, myClientId)
+
+            // Send rematchState to both players
+            const statePayload = {
+              type: "rematchState",
+              acceptedA: result.room.rematchAcceptedA,
+              acceptedB: result.room.rematchAcceptedB,
+            }
+            sendToClient(room.playerA, statePayload)
+            if (room.playerB) {
+              sendToClient(room.playerB, statePayload)
+            }
+
+            // If both accepted, reset room and notify
+            if (result.bothAccepted) {
+              sendToClient(room.playerA, {
+                type: "roomUpdate",
+                players: [
+                  { clientId: room.playerA, ready: false },
+                  ...(room.playerB ? [{ clientId: room.playerB, ready: false }] : []),
+                ],
+                roomStatus: "waiting",
+              })
+              if (room.playerB) {
+                sendToClient(room.playerB, {
+                  type: "roomUpdate",
+                  players: [
+                    { clientId: room.playerA, ready: false },
+                    { clientId: room.playerB, ready: false },
+                  ],
+                  roomStatus: "waiting",
+                })
+              }
+            }
+          } catch (e) {
+            ws.send(JSON.stringify({
+              type: "error",
+              message: (e as Error).message,
+            }))
+          }
+          return
+        }
+
+        if (action === "leaveRoom" && myClientId) {
+          // Find which room this player is in
+          let foundRoom: Room | undefined
+          for (const room of rooms.values()) {
+            if (room.playerA === myClientId || room.playerB === myClientId) {
+              foundRoom = room
+              break
+            }
+          }
+
+          if (foundRoom) {
+            const room = foundRoom
+            const isHost = room.playerA === myClientId
+
+            if (isHost) {
+              // Host leaves — delete room
+              rooms.delete(room.roomId)
+              // Notify remaining player if any
+              if (room.playerB) {
+                sendToClient(room.playerB, { type: "error", message: "Host left the room" })
+              }
+            } else {
+              // playerB leaves — reset room to waiting
+              room.playerB = null
+              room.playerAReady = false
+              room.playerBReady = false
+              room.status = "waiting"
+              delete room.gameState
+              delete room.colors
+              room.rematchAcceptedA = false
+              room.rematchAcceptedB = false
+              sendToClient(room.playerA, {
+                type: "roomUpdate",
+                players: [{ clientId: room.playerA, ready: false }],
+                roomStatus: "waiting",
+              })
+              broadcastLobbyUpdate()
+            }
           }
           return
         }

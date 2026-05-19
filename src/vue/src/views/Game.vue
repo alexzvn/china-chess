@@ -99,6 +99,17 @@ const { clientId, status, send } = useWebSocket((data) => {
     gameStarted.value = false
     gameOver.value = false
   }
+
+  if (data.type === "rematchState") {
+    const msg = data as { acceptedA: boolean; acceptedB: boolean }
+    // If both accepted, reset to pre-game
+    if (msg.acceptedA && msg.acceptedB) {
+      gameOver.value = false
+      gameStarted.value = false
+      myColor.value = null
+      setBoard(createInitialBoard())
+    }
+  }
 })
 
 function createInitialBoard(): BoardState {
@@ -154,6 +165,10 @@ function backToLobby() {
 
 function kick() {
   send({ action: "kickPlayer", roomId })
+}
+
+function rematch() {
+  send({ action: "rematch", roomId })
 }
 
 function sendChat(text: string) {
@@ -234,6 +249,7 @@ function declineDraw() {
           @offer-draw="offerDraw"
           @back-to-lobby="backToLobby"
           @kick="kick"
+          @rematch="rematch"
         />
       </div>
 
