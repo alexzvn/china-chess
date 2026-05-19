@@ -79,10 +79,10 @@ const S = 100
         <!-- Inner verticals — bottom half -->
         <line v-for="f in 7" :key="'vu-' + f" :x1="M + f * S" :y1="M + 5 * S" :x2="M + f * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
         <!-- Palace diagonals -->
-        <line x1="M + 3 * S" :y1="M + 0 * S" x2="M + 5 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
-        <line x1="M + 5 * S" :y1="M + 0 * S" x2="M + 3 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
-        <line x1="M + 3 * S" :y1="M + 7 * S" x2="M + 5 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
-        <line x1="M + 5 * S" :y1="M + 7 * S" x2="M + 3 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="M + 3 * S" :y1="M + 0 * S" :x2="M + 5 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="M + 5 * S" :y1="M + 0 * S" :x2="M + 3 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="M + 3 * S" :y1="M + 7 * S" :x2="M + 5 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="M + 5 * S" :y1="M + 7 * S" :x2="M + 3 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
         <!-- Point dots -->
         <circle v-for="dot in DOT_POSITIONS" :key="'dot-' + dot.rank + '-' + dot.file" :cx="M + dot.file * S" :cy="M + dot.rank * S" r="5" fill="#8B7355" />
       </svg>
