@@ -84,10 +84,26 @@ function serveIndex(): Response {
 export function createApp() {
   app = new Elysia()
     .get("/", () => serveIndex())
-    .use(staticPlugin({ assets: "./public", prefix: "/", alwaysStatic: true }))
     .get("/*", ({ request }) => {
-      // SPA fallback — only for non-file paths
       const url = new URL(request.url)
+      const filePath = "./public" + url.pathname
+      // Try to serve static file from public/
+      if (existsSync(filePath)) {
+        const file = readFileSync(filePath)
+        const ext = url.pathname.split(".").pop() || ""
+        const mime: Record<string, string> = {
+          js: "application/javascript",
+          css: "text/css",
+          html: "text/html",
+          png: "image/png",
+          svg: "image/svg+xml",
+          ico: "image/x-icon",
+        }
+        return new Response(file, {
+          headers: { "Content-Type": mime[ext] || "application/octet-stream" },
+        })
+      }
+      // SPA fallback — serve index.html for any non-file path
       if (!url.pathname.includes(".")) {
         return serveIndex()
       }
