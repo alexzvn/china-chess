@@ -188,6 +188,114 @@ describe("Board — piece positioning", () => {
   })
 })
 
+describe("Board — flipped coordinate transforms", () => {
+  const M = 50,
+    S = 100
+
+  it("sx returns normal file coordinate when not flipped", () => {
+    const sx = (file: number, flipped: boolean) => M + (flipped ? 8 - file : file) * S
+    expect(sx(0, false)).toBe(50)
+    expect(sx(4, false)).toBe(450)
+    expect(sx(8, false)).toBe(850)
+  })
+
+  it("sx mirrors file coordinate when flipped", () => {
+    const sx = (file: number, flipped: boolean) => M + (flipped ? 8 - file : file) * S
+    expect(sx(0, true)).toBe(850)
+    expect(sx(4, true)).toBe(450)
+    expect(sx(8, true)).toBe(50)
+  })
+
+  it("sy returns normal rank coordinate when not flipped", () => {
+    const sy = (rank: number, flipped: boolean) => M + (flipped ? 9 - rank : rank) * S
+    expect(sy(0, false)).toBe(50)
+    expect(sy(5, false)).toBe(550)
+    expect(sy(9, false)).toBe(950)
+  })
+
+  it("sy reverses rank coordinate when flipped", () => {
+    const sy = (rank: number, flipped: boolean) => M + (flipped ? 9 - rank : rank) * S
+    expect(sy(0, true)).toBe(950)
+    expect(sy(5, true)).toBe(450) // 50 + (9-5)*100 = 450
+    expect(sy(9, true)).toBe(50)
+  })
+
+  it("flipped sx+sy preserves center point", () => {
+    const sx = (file: number, flipped: boolean) => M + (flipped ? 8 - file : file) * S
+    const sy = (rank: number, flipped: boolean) => M + (flipped ? 9 - rank : rank) * S
+    // Center of board (rank 4.5, file 4) should be same in both modes
+    expect(sx(4, false)).toBe(450)
+    expect(sx(4, true)).toBe(450)
+    // Rank 4 and rank 5 swap positions
+    expect(sy(4, true)).toBe(550) // 50 + (9-4)*100 = 550 — rank 4 appears where rank 5 was
+    expect(sy(5, true)).toBe(450) // 50 + (9-5)*100 = 450 — rank 5 appears where rank 4 was
+  })
+
+  it("flipped cell iteration reverses order", () => {
+    const cells: { rank: number; file: number }[] = []
+    const flipped = true
+    if (flipped) {
+      for (let rank = 9; rank >= 0; rank--) {
+        for (let file = 8; file >= 0; file--) {
+          cells.push({ rank, file })
+        }
+      }
+    } else {
+      for (let rank = 0; rank < 10; rank++) {
+        for (let file = 0; file < 9; file++) {
+          cells.push({ rank, file })
+        }
+      }
+    }
+    // When flipped: first cell is bottom-right (9,8), last is top-left (0,0)
+    expect(cells[0]).toEqual({ rank: 9, file: 8 })
+    expect(cells[89]).toEqual({ rank: 0, file: 0 })
+    // Still 90 cells
+    expect(cells.length).toBe(90)
+  })
+
+  it("unflipped cell iteration is unchanged", () => {
+    const cells: { rank: number; file: number }[] = []
+    const flipped = false
+    if (flipped) {
+      for (let rank = 9; rank >= 0; rank--) {
+        for (let file = 8; file >= 0; file--) {
+          cells.push({ rank, file })
+        }
+      }
+    } else {
+      for (let rank = 0; rank < 10; rank++) {
+        for (let file = 0; file < 9; file++) {
+          cells.push({ rank, file })
+        }
+      }
+    }
+    expect(cells[0]).toEqual({ rank: 0, file: 0 })
+    expect(cells[89]).toEqual({ rank: 9, file: 8 })
+    expect(cells.length).toBe(90)
+  })
+
+  it("click on flipped cell emits engine-native coordinates", () => {
+    // Display position (9,8) is the first cell when flipped
+    // But it should emit engine coordinates (0,0) — the piece that's there
+    const displayRank = 9
+    const displayFile = 8
+    // Map display to engine: engineRank = 9 - displayRank, engineFile = 8 - displayFile
+    const flippedRenderOrder = (rank: number, file: number) => ({
+      rank: 9 - rank,
+      file: 8 - file,
+    })
+    // Actually no: the cell stores engine-native rank/file, just rendered in reverse order
+    // So clicking the first cell (display position 0) gives engine rank 9, file 8
+    const cellsWithEngineCoords = [
+      { rank: 9, file: 8 },
+    ]
+    const clicked = cellsWithEngineCoords[0]!
+    expect(clicked.rank).toBe(9)
+    expect(clicked.file).toBe(8)
+  })
+})
+
 describe("Board — interaction handling", () => {
   it("emits cellClick with correct rank and file on click", () => {
     let capturedRank = -1

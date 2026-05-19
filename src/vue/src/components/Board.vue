@@ -5,6 +5,7 @@ import type { BoardState } from "../composables/useBoard"
 
 const props = defineProps<{
   board: BoardState
+  flipped?: boolean
   selectedPos?: { rank: number; file: number } | null
   legalMoves?: { rank: number; file: number }[]
   isLegalTarget?: (rank: number, file: number) => boolean
@@ -24,13 +25,25 @@ interface CellPos {
 
 const cells = computed<CellPos[]>(() => {
   const result: CellPos[] = []
-  for (let rank = 0; rank < 10; rank++) {
-    for (let file = 0; file < 9; file++) {
-      result.push({
-        rank,
-        file,
-        piece: props.board[rank]![file] ?? null,
-      })
+  if (props.flipped) {
+    for (let rank = 9; rank >= 0; rank--) {
+      for (let file = 8; file >= 0; file--) {
+        result.push({
+          rank,
+          file,
+          piece: props.board[rank]![file] ?? null,
+        })
+      }
+    }
+  } else {
+    for (let rank = 0; rank < 10; rank++) {
+      for (let file = 0; file < 9; file++) {
+        result.push({
+          rank,
+          file,
+          piece: props.board[rank]![file] ?? null,
+        })
+      }
     }
   }
   return result
@@ -58,11 +71,13 @@ function isCheckKing(piece: string | null): boolean {
 
 const M = 50
 const S = 100
+const sx = (file: number) => M + (props.flipped ? 8 - file : file) * S
+const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
 </script>
 
 <template>
   <div class="board-wrapper inline-block">
-    <div class="board-surface relative overflow-hidden" :style="{ width: '90vmin', height: '100vmin' }">
+    <div class="board-surface relative overflow-hidden" :style="{ width: 'min(90vmin, 560px)', height: 'min(100vmin, 622px)' }">
       <!-- SVG grid lines -->
       <svg
         class="absolute inset-0 w-full h-full pointer-events-none"
@@ -70,21 +85,21 @@ const S = 100
         preserveAspectRatio="none"
       >
         <!-- Horizontal lines -->
-        <line v-for="r in 10" :key="'h-' + r" :x1="M" :y1="M + (r - 1) * S" :x2="M + 8 * S" :y2="M + (r - 1) * S" stroke="#8B7355" stroke-width="2" />
+        <line v-for="r in 10" :key="'h-' + r" :x1="sx(0)" :y1="sy(r - 1)" :x2="sx(8)" :y2="sy(r - 1)" stroke="#8B7355" stroke-width="2" />
         <!-- Edges -->
-        <line :x1="M" :y1="M" :x2="M" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
-        <line :x1="M + 8 * S" :y1="M" :x2="M + 8 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(0)" :y1="sy(0)" :x2="sx(0)" :y2="sy(9)" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(8)" :y1="sy(0)" :x2="sx(8)" :y2="sy(9)" stroke="#8B7355" stroke-width="2" />
         <!-- Inner verticals — top half -->
-        <line v-for="f in 7" :key="'vl-' + f" :x1="M + f * S" :y1="M" :x2="M + f * S" :y2="M + 4 * S" stroke="#8B7355" stroke-width="2" />
+        <line v-for="f in 7" :key="'vl-' + f" :x1="sx(f)" :y1="sy(0)" :x2="sx(f)" :y2="sy(4)" stroke="#8B7355" stroke-width="2" />
         <!-- Inner verticals — bottom half -->
-        <line v-for="f in 7" :key="'vu-' + f" :x1="M + f * S" :y1="M + 5 * S" :x2="M + f * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <line v-for="f in 7" :key="'vu-' + f" :x1="sx(f)" :y1="sy(5)" :x2="sx(f)" :y2="sy(9)" stroke="#8B7355" stroke-width="2" />
         <!-- Palace diagonals -->
-        <line :x1="M + 3 * S" :y1="M + 0 * S" :x2="M + 5 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
-        <line :x1="M + 5 * S" :y1="M + 0 * S" :x2="M + 3 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
-        <line :x1="M + 3 * S" :y1="M + 7 * S" :x2="M + 5 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
-        <line :x1="M + 5 * S" :y1="M + 7 * S" :x2="M + 3 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(3)" :y1="sy(0)" :x2="sx(5)" :y2="sy(2)" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(5)" :y1="sy(0)" :x2="sx(3)" :y2="sy(2)" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(3)" :y1="sy(7)" :x2="sx(5)" :y2="sy(9)" stroke="#8B7355" stroke-width="2" />
+        <line :x1="sx(5)" :y1="sy(7)" :x2="sx(3)" :y2="sy(9)" stroke="#8B7355" stroke-width="2" />
         <!-- Point dots -->
-        <circle v-for="dot in DOT_POSITIONS" :key="'dot-' + dot.rank + '-' + dot.file" :cx="M + dot.file * S" :cy="M + dot.rank * S" r="5" fill="#8B7355" />
+        <circle v-for="dot in DOT_POSITIONS" :key="'dot-' + dot.rank + '-' + dot.file" :cx="sx(dot.file)" :cy="sy(dot.rank)" r="5" fill="#8B7355" />
       </svg>
 
       <!-- River text -->

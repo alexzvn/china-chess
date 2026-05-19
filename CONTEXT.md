@@ -24,6 +24,8 @@ A full-stack online multiplayer Chinese Chess (象棋/中国象棋) game. Two pl
 - **Checkmate:** The king is in check and no legal move removes the check.
 - **Stalemate:** The player has no legal moves but the king is not in check — this is a loss.
 - **Red moves first** (traditional Chinese Chess convention).
+- **Pre-game:** The phase after both players join a room but before the game starts. Both players see the board in starting position and toggle their ready state.
+- **Ready state:** A toggleable boolean indicating a player is prepared to start the game. The game transitions from `waiting` to `playing` only when both players are ready.
 
 ## Architecture Overview
 
@@ -43,6 +45,7 @@ chess/
         RoomCard.vue    — Lobby room entry card
         ChatPanel.vue   — Chat messages and input
         PlayerInfo.vue  — Player color and status display
+        SidePanel.vue    — Side panel with player info, ready status, and chat
       views/
         Lobby.vue       — Room listing and create room
         Game.vue        — Full game view (board + chat + info)
@@ -74,3 +77,7 @@ chess/
 - Vue views: `src/vue/views/`
 - ADRs: `docs/adr/`
 - PRD: `.scratch/chinese-chess-online-game/issue.md`
+- Game Room UI Overhaul PRD: `.scratch/game-room-ui-overhaul/issue.md`
+- Slice 1 (board flip + size): `.scratch/18-board-flip-size/issue.md`
+- Slice 2 (server broadcast): `.scratch/19-server-room-broadcast/issue.md`
+- Slice 3 (side panel + ready): `.scratch/20-side-panel-ready-flow/issue.md`
