@@ -8,7 +8,7 @@ import {
   joinRoom,
   startGame,
 } from "./rooms"
-import { makeMove, isInCheck } from "./game/engine"
+import { makeMove, isInCheck, isCheckmate, isStalemate } from "./game/engine"
 import type { ServerWebSocket } from "bun"
 import type { Position } from "./game/engine"
 
@@ -192,6 +192,100 @@ export function createApp() {
           }
           sendToClient(room.playerA, update)
           sendToClient(room.playerB!, update)
+
+          // Check for checkmate or stalemate
+          const winner =
+            isCheckmate(result.board, result.turn)
+              ? { result: "checkmate", winnerColor: result.turn === "red" ? "black" : "red" }
+              : isStalemate(result.board, result.turn)
+                ? { result: "stalemate", winnerColor: result.turn === "red" ? "black" : "red" }
+                : null
+
+          if (winner) {
+            room.status = "finished"
+            const endMsg = {
+              type: "gameEnd",
+              result: winner.result,
+              winnerColor: winner.winnerColor,
+              reason: `Checkmate! ${winner.winnerColor === "red" ? "Red" : "Black"} wins`,
+            }
+            sendToClient(room.playerA, endMsg)
+            sendToClient(room.playerB!, endMsg)
+            broadcastLobbyUpdate()
+          }
+          return
+        }
+
+        if (action === "resign" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room || room.status !== "playing") {
+            ws.send(JSON.stringify({ type: "error", message: "Game not active" }))
+            return
+          }
+          room.status = "finished"
+          const winnerColor = room.playerA === myClientId
+            ? room.colors!.b : room.colors!.a
+          const endMsg = {
+            type: "gameEnd",
+            result: "resign",
+            winnerColor,
+            reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`,
+          }
+          sendToClient(room.playerA, endMsg)
+          sendToClient(room.playerB!, endMsg)
+          broadcastLobbyUpdate()
+          return
+        }
+
+        if (data.type === "drawOffer" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room || room.status !== "playing") return
+          const opponentId = room.playerA === myClientId ? room.playerB! : room.playerA
+          sendToClient(opponentId, { type: "drawOffered", fromClientId: myClientId })
+          return
+        }
+
+        if (data.type === "drawAccept" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room || room.status !== "playing") return
+          room.status = "finished"
+          const endMsg = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw" }
+          sendToClient(room.playerA, endMsg)
+          sendToClient(room.playerB!, endMsg)
+          broadcastLobbyUpdate()
+          return
+        }
+
+        if (data.type === "drawDecline" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room) return
+          const opponentId = room.playerA === myClientId ? room.playerB! : room.playerA
+          sendToClient(opponentId, { type: "drawDeclined" })
+          return
+        }
+
+        if (data.type === "chat" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room) return
+          const text = data.text as string
+          const isPlayerA = room.playerA === myClientId
+          const color = isPlayerA ? room.colors!.a : room.colors!.b
+          const chatMsg = {
+            type: "chat",
+            message: {
+              sender: myClientId,
+              text,
+              timestamp: Date.now(),
+              color,
+            },
+          }
+          sendToClient(room.playerA, chatMsg)
+          sendToClient(room.playerB!, chatMsg)
           return
         }
       },
