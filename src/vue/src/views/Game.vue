@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { shallowRef, ref, watch } from "vue"
+import { shallowRef, ref, computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import Board from "../components/Board.vue"
-import PlayerInfo from "../components/PlayerInfo.vue"
-import ChatPanel from "../components/ChatPanel.vue"
+import SidePanel from "../components/SidePanel.vue"
+import type { RoomPlayer } from "../components/SidePanel.vue"
 import type { ChatMessage } from "../components/ChatPanel.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 import { useBoard } from "../composables/useBoard"
@@ -17,21 +17,37 @@ const originalClientId = route.query.cid as string | undefined
 
 const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, inCheckColor, setBoard, setTurn, setInCheck, clearSelection } = useBoard()
 
-const joined = shallowRef(false)
 const gameStarted = shallowRef(false)
 const gameOver = shallowRef(false)
 const gameResult = shallowRef("")
 const myColor = shallowRef<"red" | "black" | null>(null)
+const myClientId = shallowRef<string | null>(null)
 const error = shallowRef<string | null>(null)
+const players = ref<RoomPlayer[]>([])
 const chatMessages = ref<ChatMessage[]>([])
 const drawOffered = shallowRef(false)
 const pendingDrawOffer = shallowRef(false)
 
 const { playSound } = useSound()
 
+const mode = computed<"pre-game" | "in-game" | "game-over">(() => {
+  if (gameOver.value) return "game-over"
+  if (gameStarted.value) return "in-game"
+  return "pre-game"
+})
+
 const { clientId, status, send } = useWebSocket((data) => {
-  if (data.type === "roomJoined") {
-    joined.value = true
+  if (data.type === "connected") {
+    myClientId.value = data.clientId as string
+  }
+
+  if (data.type === "roomUpdate") {
+    const msg = data as { players: RoomPlayer[] }
+    players.value = msg.players
+    // Set initial board if not yet started
+    if (!gameStarted.value && !gameOver.value) {
+      setBoard(createInitialBoard())
+    }
   }
 
   if (data.type === "gameStart") {
@@ -77,6 +93,27 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 })
 
+function createInitialBoard(): BoardState {
+  const board: BoardState = Array.from({ length: 10 }, () => Array(9).fill(null))
+  board[0] = ["b車", "b馬", "b象", "b士", "b將", "b士", "b象", "b馬", "b車"]
+  board[2]![1] = "b砲"
+  board[2]![7] = "b砲"
+  board[3]![0] = "b卒"
+  board[3]![2] = "b卒"
+  board[3]![4] = "b卒"
+  board[3]![6] = "b卒"
+  board[3]![8] = "b卒"
+  board[9] = ["r車", "r馬", "r象", "r士", "r帥", "r士", "r象", "r馬", "r車"]
+  board[7]![1] = "r炮"
+  board[7]![7] = "r炮"
+  board[6]![0] = "r兵"
+  board[6]![2] = "r兵"
+  board[6]![4] = "r兵"
+  board[6]![6] = "r兵"
+  board[6]![8] = "r兵"
+  return board
+}
+
 // Wait for both connected AND clientId to be set before sending room actions
 watch([status, clientId], ([s, cid]) => {
   if (s === "connected" && cid && roomId) {
@@ -84,22 +121,22 @@ watch([status, clientId], ([s, cid]) => {
       // Came from Lobby after creating room — reclaim our original player slot
       send({ action: "reclaimRoom", roomId, originalClientId })
     } else {
-      // Fresh join from lobby click or bookmark — join as playerB or reconnect if game active
+      // Fresh join from lobby click or bookmark
       send({ action: "joinRoom", roomId })
     }
   }
 })
 
 function onCellClick(rank: number, file: number) {
-  if (gameOver.value) return
+  if (gameOver.value || !gameStarted.value) return
   const move = handleCellClick(rank, file)
-  if (move && gameStarted.value) {
+  if (move) {
     send({ action: "move", roomId, from: move.from, to: move.to })
   }
 }
 
-function confirmStart() {
-  send({ action: "startGame", roomId })
+function toggleReady() {
+  send({ action: "toggleReady", roomId })
 }
 
 function backToLobby() {
@@ -133,68 +170,65 @@ function declineDraw() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 flex flex-col items-center p-2 md:p-4">
-    <div v-if="error && !gameStarted" class="max-w-md w-full text-center">
+  <div class="min-h-screen bg-gray-50 p-2 md:p-4">
+    <!-- Error state -->
+    <div v-if="error && !gameStarted && players.length === 0" class="max-w-md mx-auto text-center">
       <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
         <p class="text-red-700">{{ error }}</p>
         <button @click="backToLobby" class="mt-3 text-sm text-blue-600 hover:underline">Back to Lobby</button>
       </div>
     </div>
 
-    <div v-else class="flex flex-col items-center gap-3 w-full max-w-full">
-      <div class="text-center">
+    <template v-else>
+      <!-- Room header -->
+      <div class="text-center mb-3">
         <h1 class="text-lg font-bold text-gray-800">
           Room: <span class="font-mono text-sm">{{ roomId }}</span>
         </h1>
       </div>
 
-      <!-- Pre-game start -->
-      <div v-if="!gameStarted && !gameOver" class="flex gap-4 items-center">
-        <p class="text-sm text-gray-500">Waiting for players...</p>
-        <button v-if="joined" @click="confirmStart" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors text-sm">Start Game</button>
-      </div>
-
-      <!-- Game area -->
-      <div v-if="gameStarted" class="flex gap-4 items-start">
-        <div class="flex flex-col items-center gap-2">
-          <PlayerInfo color="black" label="Black" :is-active="turn === 'black'" :is-in-check="inCheckColor === 'black'" />
+      <!-- Board + Side Panel layout -->
+      <div class="flex flex-col md:flex-row gap-4 items-start justify-center">
+        <!-- Board -->
+        <div class="flex flex-col items-center">
           <Board
             :board="board"
+            :flipped="myColor === 'black'"
             :selected-pos="selectedPos"
             :legal-moves="legalMoves"
             :is-legal-target="isLegalTarget"
             :is-capture-target="isCaptureTarget"
             :in-check-color="inCheckColor"
-            :class="{ 'pointer-events-none': gameOver }"
+            :class="{ 'pointer-events-none': !gameStarted || gameOver }"
             @cell-click="onCellClick"
           />
-          <PlayerInfo color="red" label="Red" :is-active="turn === 'red'" :is-in-check="inCheckColor === 'red'" />
         </div>
-        <ChatPanel :messages="chatMessages" :disabled="gameOver" @send="sendChat" />
+
+        <!-- Side Panel -->
+        <SidePanel
+          :mode="mode"
+          :players="players"
+          :my-client-id="myClientId"
+          :my-color="myColor"
+          :turn="turn"
+          :in-check-color="inCheckColor"
+          :game-result="gameResult"
+          :chat-messages="chatMessages"
+          :chat-disabled="gameOver"
+          @toggle-ready="toggleReady"
+          @send-chat="sendChat"
+          @resign="resign"
+          @offer-draw="offerDraw"
+          @back-to-lobby="backToLobby"
+        />
       </div>
 
       <!-- Draw offer notification -->
-      <div v-if="pendingDrawOffer" class="bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2 flex items-center gap-3">
+      <div v-if="pendingDrawOffer" class="fixed bottom-4 right-4 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2 flex items-center gap-3 shadow-lg z-50">
         <span class="text-sm text-yellow-800">Opponent offers a draw</span>
         <button @click="acceptDraw" class="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
         <button @click="declineDraw" class="text-sm px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Decline</button>
       </div>
-
-      <!-- In-game action buttons -->
-      <div v-if="gameStarted && !gameOver" class="flex gap-3">
-        <button @click="resign" class="text-sm px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors">Resign</button>
-        <button @click="offerDraw" :disabled="drawOffered" class="text-sm px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
-          {{ drawOffered ? "Draw Offered" : "Offer Draw" }}
-        </button>
-      </div>
-
-      <!-- Game over status bar -->
-      <div v-if="gameOver" class="bg-gray-800 text-white px-6 py-3 rounded-lg text-center">
-        <p class="font-bold">{{ gameResult }}</p>
-        <button @click="backToLobby" class="mt-2 text-sm text-blue-300 hover:text-blue-200 underline">Back to Lobby</button>
-      </div>
-
-      <button v-if="!gameStarted" @click="backToLobby" class="text-sm text-gray-500 hover:text-gray-700 underline">Back to Lobby</button>
-    </div>
+    </template>
   </div>
 </template>
