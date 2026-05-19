@@ -246,7 +246,7 @@ export function getLegalMoves(board: Board, pos: Position): Position[] {
 
       // Simulate the move
       const sim = cloneBoard(board)
-      sim[r]![f] = sim[pos.rank]![pos.file]
+      sim[r]![f] = sim[pos.rank]![pos.file] ?? null
       sim[pos.rank]![pos.file] = null
 
       // Check if own king would be in check
@@ -322,7 +322,7 @@ export function makeMove(
 
   // Apply the move
   const newBoard = cloneBoard(state.board)
-  newBoard[to.rank]![to.file] = newBoard[from.rank]![from.file]
+  newBoard[to.rank]![to.file] = newBoard[from.rank]![from.file] ?? null
   newBoard[from.rank]![from.file] = null
 
   return {

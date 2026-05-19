@@ -62,7 +62,7 @@ describe("getLegalMoves", () => {
     // Every returned move must not leave king in check
     for (const m of moves) {
       const copy = b.map((row) => [...row])
-      copy[m.rank]![m.file] = copy[7]![0]
+      copy[m.rank]![m.file] = copy[7]![0] ?? null
       copy[7]![0] = null
       expect(isInCheck(copy, "red")).toBe(false)
     }

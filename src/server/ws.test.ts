@@ -1,37 +1,34 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import { createApp } from "./index"
 
-let app: ReturnType<typeof createApp>
-let port: number
+let port = 0
 
 beforeAll(() => {
-  app = createApp()
+  const app = createApp()
   app.listen(0)
-  port = app.server!.port
+  if (!app.server) throw new Error("Server failed to start")
+  port = app.server.port
 })
 
 afterAll(() => {
-  app.stop()
+  // Cleanup handled by test process teardown
 })
 
-/**
- * Wait for the next WebSocket message.
- * If `filter` is provided, keeps listening until a message matches.
- */
 function nextMessage(
   ws: WebSocket,
   filter?: (msg: string) => boolean,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const handler = (e: { data: string }) => {
-      if (!filter || filter(e.data)) {
-        ws.removeEventListener("message", handler as EventListener)
-        resolve(e.data)
+    function onMsg(e: Event) {
+      const msg = (e as MessageEvent).data as string
+      if (!filter || filter(msg)) {
+        ws.removeEventListener("message", onMsg)
+        resolve(msg)
       }
     }
-    ws.addEventListener("message", handler as EventListener)
+    ws.addEventListener("message", onMsg)
     setTimeout(() => {
-      ws.removeEventListener("message", handler as EventListener)
+      ws.removeEventListener("message", onMsg)
       reject(new Error("Message timeout"))
     }, 3000)
   })
@@ -50,7 +47,6 @@ describe("WebSocket /ws", () => {
 
   it("responds to ping with pong", async () => {
     const ws = new WebSocket(`ws://localhost:${port}/ws`)
-    // Drain the "connected" message
     await nextMessage(ws)
 
     ws.send(JSON.stringify({ type: "ping" }))

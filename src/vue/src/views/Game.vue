@@ -40,16 +40,13 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "boardUpdate") {
-    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number; inCheck?: boolean; lastMove?: { from: Record<string, number>; to: Record<string, number> } }
+    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number; inCheck?: boolean; lastMove?: { from: { rank: number; file: number }; to: { rank: number; file: number } } }
     setBoard(msg.board)
     setTurn(msg.turn)
     setInCheck(msg.inCheck ? msg.turn : null)
     // Sound effects
     if (msg.inCheck) {
       playSound("check")
-    } else if (msg.lastMove && msg.board[msg.lastMove.to.rank]?.[msg.lastMove.to.file] !== msg.board[msg.lastMove.from.rank]?.[msg.lastMove.from.file]) {
-      // Rough capture detection
-      playSound("capture")
     } else {
       playSound("move")
     }

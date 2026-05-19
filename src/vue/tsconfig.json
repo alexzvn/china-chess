@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@server/*": ["../server/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"],
+  "vueCompilerOptions": {
+    "target": 3.5
+  }
+}

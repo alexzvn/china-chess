@@ -1,10 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test"
+import { describe, it, expect, beforeAll } from "bun:test"
 import { createApp } from "./index"
 
-let port: number
-const app = createApp()
+let port = 0
 
-/** Create a WebSocket wrapper that collects all messages */
 function connectedWs(): Promise<{
   ws: WebSocket
   messages: string[]
@@ -18,10 +16,7 @@ function connectedWs(): Promise<{
     ws.onmessage = (e) => {
       const text = e.data as string
       messages.push(text)
-      // Notify any pending waitFor
-      for (const listener of listeners) {
-        listener(text)
-      }
+      for (const fn of listeners) fn(text)
     }
     ws.onopen = () =>
       resolve({
@@ -29,13 +24,11 @@ function connectedWs(): Promise<{
         messages,
         waitFor: (filter) =>
           new Promise((res, rej) => {
-            // Check already-received messages
             const match = filter
               ? messages.find(filter)
               : messages[messages.length - 1]
             if (match) return res(match)
 
-            // Wait for next matching message
             const handler = (msg: string) => {
               if (!filter || filter(msg)) {
                 const idx = listeners.indexOf(handler)
@@ -57,18 +50,16 @@ function connectedWs(): Promise<{
 }
 
 beforeAll(() => {
+  const app = createApp()
   app.listen(0)
-  port = app.server!.port
-})
-
-afterAll(() => {
-  app.stop()
+  const server = app.server
+  if (!server) throw new Error("Server failed to start")
+  port = server.port
 })
 
 describe("Lobby via WebSocket", () => {
   it("creates a room and receives roomCreated + lobbyUpdate", async () => {
     const clientA = await connectedWs()
-    // Drain connected message
     await clientA.waitFor((m) => m.includes('"type":"connected"'))
 
     clientA.ws.send(JSON.stringify({ action: "createRoom" }))
@@ -97,14 +88,11 @@ describe("Lobby via WebSocket", () => {
     await clientA.waitFor((m) => m.includes('"type":"connected"'))
     await clientB.waitFor((m) => m.includes('"type":"connected"'))
 
-    // Client A creates a room
     clientA.ws.send(JSON.stringify({ action: "createRoom" }))
 
-    // Client A gets roomCreated + lobbyUpdate
     await clientA.waitFor((m) => m.includes('"type":"roomCreated"'))
     await clientA.waitFor((m) => m.includes('"type":"lobbyUpdate"'))
 
-    // Client B should also get the lobbyUpdate broadcast
     const bUpdate = await clientB.waitFor((m) =>
       m.includes('"type":"lobbyUpdate"'),
     )

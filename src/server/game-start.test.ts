@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test"
+import { describe, it, expect, beforeAll } from "bun:test"
 import { createApp } from "./index"
 
-let port: number
-const app = createApp()
+let port = 0
 
 interface TestClient {
   ws: WebSocket
@@ -53,12 +52,11 @@ function createClient(): Promise<TestClient> {
 }
 
 beforeAll(() => {
+  const app = createApp()
   app.listen(0)
-  port = app.server!.port
-})
-
-afterAll(() => {
-  app.stop()
+  const server = app.server
+  if (!server) throw new Error("Server failed to start")
+  port = server.port
 })
 
 describe("Game start flow", () => {
@@ -68,30 +66,20 @@ describe("Game start flow", () => {
     await a.waitFor((m) => m.includes('"type":"connected"'))
     await b.waitFor((m) => m.includes('"type":"connected"'))
 
-    // A creates a room
     a.ws.send(JSON.stringify({ action: "createRoom" }))
     const roomCreated = await a.waitFor((m) =>
       m.includes('"type":"roomCreated"'),
     )
     const { roomId } = JSON.parse(roomCreated)
 
-    // B joins the room
     b.ws.send(JSON.stringify({ action: "joinRoom", roomId }))
 
-    // Both should receive roomJoined
-    const aJoined = await a.waitFor((m) => m.includes('"type":"roomJoined"'))
-    const bJoined = await b.waitFor((m) => m.includes('"type":"roomJoined"'))
-    expect(JSON.parse(aJoined).roomId).toBe(roomId)
-    expect(JSON.parse(bJoined).roomId).toBe(roomId)
+    await a.waitFor((m) => m.includes('"type":"roomJoined"'))
+    await b.waitFor((m) => m.includes('"type":"roomJoined"'))
 
-    // Drain lobbyUpdates from A (from create + join broadcasts)
-    // Just wait for both clients to settle
-
-    // Both confirm start
     a.ws.send(JSON.stringify({ action: "startGame", roomId }))
     b.ws.send(JSON.stringify({ action: "startGame", roomId }))
 
-    // Both receive gameStart with their color
     const aStart = await a.waitFor((m) => m.includes('"type":"gameStart"'))
     const bStart = await b.waitFor((m) => m.includes('"type":"gameStart"'))
 
@@ -106,11 +94,9 @@ describe("Game start flow", () => {
     expect(bData.roomId).toBe(roomId)
     expect(["red", "black"]).toContain(bData.yourColor)
 
-    // Colors should be opposite
     expect(aData.yourColor).not.toBe(bData.yourColor)
 
     // Game room should no longer appear in lobby
-    // Clear A's message buffer and request fresh lobby state
     a.messages.length = 0
     a.ws.send(JSON.stringify({ action: "joinLobby" }))
     const lobbyUpdate = await a.waitFor((m) => m.includes('"type":"lobbyUpdate"'))

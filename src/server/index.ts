@@ -1,4 +1,4 @@
-import { Elysia, type ElysiaContext } from "elysia"
+import { Elysia } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { nanoid } from "nanoid"
 import {
@@ -41,13 +41,13 @@ function broadcastLobbyUpdate() {
   }
 }
 
-// Need to keep a reference to the latest app for server.publish
-let app: Elysia | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let app: any = null
 
 export function createApp() {
   app = new Elysia()
     .get("/", () => "Chinese Chess Server")
-    .use(staticPlugin({ dir: "./public" }))
+    .use(staticPlugin({ assets: "./public" }))
     .ws("/ws", {
       open(ws) {
         const clientId = nanoid(7)
