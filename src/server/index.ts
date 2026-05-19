@@ -7,7 +7,7 @@ import {
   getLobbyRooms,
   getRoom,
   joinRoom,
-  startGame,
+  toggleReady,
 } from "./rooms"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "./game/engine"
 import type { ServerWebSocket } from "bun"
@@ -15,7 +15,6 @@ import type { Position } from "./game/engine"
 
 const clientIds = new WeakMap<object, string>()
 const clientConnections = new Map<string, object>()
-const readyConfirmations = new Map<string, Set<string>>()
 
 function sendToClient(clientId: string, payload: Record<string, unknown>) {
   const raw = clientConnections.get(clientId)
@@ -37,6 +36,35 @@ function broadcastLobbyUpdate() {
   const server = app?.server
   if (server) {
     server.publish("lobby", payload)
+  }
+}
+
+function broadcastRoomUpdate(roomId: string) {
+  const room = getRoom(roomId)
+  if (!room) return
+
+  const players = [
+    {
+      clientId: room.playerA,
+      ready: room.playerAReady,
+    },
+  ]
+  if (room.playerB) {
+    players.push({
+      clientId: room.playerB,
+      ready: room.playerBReady,
+    })
+  }
+
+  const payload = {
+    type: "roomUpdate",
+    players,
+    roomStatus: room.status,
+  }
+
+  sendToClient(room.playerA, payload)
+  if (room.playerB) {
+    sendToClient(room.playerB, payload)
   }
 }
 
@@ -87,11 +115,8 @@ export function createApp() {
         if (action === "createRoom" && myClientId) {
           const room = createRoom(myClientId)
           ws.send(JSON.stringify({ type: "roomCreated", roomId: room.roomId }))
+          broadcastRoomUpdate(room.roomId)
           broadcastLobbyUpdate()
-          ws.send(JSON.stringify({
-            type: "lobbyUpdate",
-            rooms: getLobbyRooms(),
-          }))
           return
         }
 
@@ -133,10 +158,8 @@ export function createApp() {
         if (action === "joinRoom" && myClientId) {
           const roomId = data.roomId as string
           try {
-            const room = joinRoom(roomId, myClientId)
-            // Notify both players
-            sendToClient(room.playerA, { type: "roomJoined", roomId, player: "A" })
-            sendToClient(room.playerB!, { type: "roomJoined", roomId, player: "B" })
+            joinRoom(roomId, myClientId)
+            broadcastRoomUpdate(roomId)
             broadcastLobbyUpdate()
           } catch (e) {
             ws.send(JSON.stringify({
@@ -147,43 +170,33 @@ export function createApp() {
           return
         }
 
-        if (action === "startGame" && myClientId) {
+        if (action === "toggleReady" && myClientId) {
           const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room) {
-            ws.send(JSON.stringify({ type: "error", message: "Room not found" }))
-            return
-          }
+          try {
+            const { gameStarted } = toggleReady(roomId, myClientId)
+            broadcastRoomUpdate(roomId)
 
-          if (!readyConfirmations.has(roomId)) {
-            readyConfirmations.set(roomId, new Set())
-          }
-          readyConfirmations.get(roomId)!.add(myClientId)
-
-          const bothReady =
-            room.playerB !== null &&
-            readyConfirmations.get(roomId)!.has(room.playerA) &&
-            readyConfirmations.get(roomId)!.has(room.playerB)
-
-          if (bothReady) {
-            const result = startGame(roomId)
-            const colorA = result.colors.a
-            const colorB = result.colors.b
-
-            sendToClient(room.playerA, {
-              type: "gameStart",
-              yourColor: colorA,
-              roomId,
-              opponentId: room.playerB,
-            })
-            sendToClient(room.playerB!, {
-              type: "gameStart",
-              yourColor: colorB,
-              roomId,
-              opponentId: room.playerA,
-            })
-
-            broadcastLobbyUpdate()
+            if (gameStarted) {
+              const room = getRoom(roomId)!
+              sendToClient(room.playerA, {
+                type: "gameStart",
+                yourColor: room.colors!.a,
+                roomId,
+                opponentId: room.playerB,
+              })
+              sendToClient(room.playerB!, {
+                type: "gameStart",
+                yourColor: room.colors!.b,
+                roomId,
+                opponentId: room.playerA,
+              })
+              broadcastLobbyUpdate()
+            }
+          } catch (e) {
+            ws.send(JSON.stringify({
+              type: "error",
+              message: (e as Error).message,
+            }))
           }
           return
         }
@@ -350,6 +363,7 @@ export function createApp() {
           clientIds.set(ws.raw, myClientId)
 
           sendToClient(myClientId, { type: "roomReclaimed", role, roomId })
+          broadcastRoomUpdate(roomId)
 
           // If game already started, send current board state
           if (room.gameState) {

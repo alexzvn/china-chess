@@ -96,12 +96,12 @@ describe("Reconnection after SPA navigation", () => {
     await opponent.waitFor((m) => m.includes('"type":"connected"'))
 
     opponent.ws.send(JSON.stringify({ action: "joinRoom", roomId }))
-    await opponent.waitFor((m) => m.includes('"type":"roomJoined"'))
+    await opponent.waitFor((m) => m.includes('"type":"roomUpdate"'))
 
     // Both ready
     const startPromise = reconnected.waitFor((m) => m.includes('"type":"gameStart"'))
-    reconnected.ws.send(JSON.stringify({ action: "startGame", roomId }))
-    opponent.ws.send(JSON.stringify({ action: "startGame", roomId }))
+    reconnected.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
+    opponent.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
 
     const startMsg = await startPromise
     expect(JSON.parse(startMsg).type).toBe("gameStart")
@@ -126,11 +126,11 @@ describe("Reconnection after SPA navigation", () => {
     const bOriginalId = JSON.parse(bConnected).clientId
 
     playerB.ws.send(JSON.stringify({ action: "joinRoom", roomId }))
-    await playerB.waitFor((m) => m.includes('"type":"roomJoined"'))
+    await playerB.waitFor((m) => m.includes('"type":"roomUpdate"'))
 
     // Start game
-    creator.ws.send(JSON.stringify({ action: "startGame", roomId }))
-    playerB.ws.send(JSON.stringify({ action: "startGame", roomId }))
+    creator.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
+    playerB.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
     await creator.waitFor((m) => m.includes('"type":"gameStart"'))
     await playerB.waitFor((m) => m.includes('"type":"gameStart"'))
 

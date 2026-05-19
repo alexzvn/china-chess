@@ -74,11 +74,12 @@ describe("Game start flow", () => {
 
     b.ws.send(JSON.stringify({ action: "joinRoom", roomId }))
 
-    await a.waitFor((m) => m.includes('"type":"roomJoined"'))
-    await b.waitFor((m) => m.includes('"type":"roomJoined"'))
+    // Both receive roomUpdate after joining
+    await a.waitFor((m) => m.includes('"type":"roomUpdate"'))
+    await b.waitFor((m) => m.includes('"type":"roomUpdate"'))
 
-    a.ws.send(JSON.stringify({ action: "startGame", roomId }))
-    b.ws.send(JSON.stringify({ action: "startGame", roomId }))
+    a.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
+    b.ws.send(JSON.stringify({ action: "toggleReady", roomId }))
 
     const aStart = await a.waitFor((m) => m.includes('"type":"gameStart"'))
     const bStart = await b.waitFor((m) => m.includes('"type":"gameStart"'))

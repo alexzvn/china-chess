@@ -7,6 +7,8 @@ export interface Room {
   createdAt: string
   playerA: string
   playerB: string | null
+  playerAReady: boolean
+  playerBReady: boolean
   status: "waiting" | "playing" | "finished"
   gameState?: GameState
   colors?: { a: "red" | "black"; b: "red" | "black" }
@@ -20,6 +22,8 @@ export function createRoom(clientId: string): Room {
     createdAt: new Date().toISOString(),
     playerA: clientId,
     playerB: null,
+    playerAReady: false,
+    playerBReady: false,
     status: "waiting",
   }
   rooms.set(room.roomId, room)
@@ -45,10 +49,40 @@ export interface GameStartResult {
   colors: { a: "red" | "black"; b: "red" | "black" }
 }
 
+export function toggleReady(roomId: string, clientId: string): { room: Room; gameStarted: boolean } {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+
+  if (clientId === room.playerA) {
+    room.playerAReady = !room.playerAReady
+  } else if (clientId === room.playerB) {
+    if (!room.playerB) throw new Error("Room is not ready")
+    room.playerBReady = !room.playerBReady
+  } else {
+    throw new Error("Client not in room")
+  }
+
+  // If unreadying after game had started, revert to waiting
+  if (room.status === "playing" && !(room.playerAReady && room.playerBReady)) {
+    room.status = "waiting"
+    delete room.colors
+    delete room.gameState
+  }
+
+  // Check if both players are ready
+  if (room.playerAReady && room.playerBReady && room.playerA && room.playerB) {
+    const result = startGame(roomId)
+    return { room, gameStarted: true }
+  }
+
+  return { room, gameStarted: false }
+}
+
 export function startGame(roomId: string): GameStartResult {
   const room = rooms.get(roomId)
   if (!room) throw new Error("Room not found")
   if (!room.playerB) throw new Error("Room is not ready")
+  if (!room.playerAReady || !room.playerBReady) throw new Error("Not all players ready")
 
   const colors: ("red" | "black")[] = ["red", "black"]
   // Randomly shuffle: 50/50 chance of either assignment
