@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue"
+import { ref, watch } from "vue"
 import RoomCard from "../components/RoomCard.vue"
+import { useWebSocket } from "../composables/useWebSocket"
 
 interface RoomInfo {
   roomId: string
@@ -10,50 +11,31 @@ interface RoomInfo {
 }
 
 const rooms = ref<RoomInfo[]>([])
-const clientId = ref<string | null>(null)
-const statusText = ref("Connecting...")
-let ws: WebSocket | null = null
 
-function connect() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-  const host = import.meta.env.DEV ? "localhost:3000" : window.location.host
-  ws = new WebSocket(`${protocol}//${host}/ws`)
-
-  ws.onopen = () => {
-    statusText.value = "Connected"
-    ws!.send(JSON.stringify({ action: "joinLobby" }))
+const { clientId, status, send } = useWebSocket((data) => {
+  if (data.type === "lobbyUpdate") {
+    rooms.value = data.rooms as RoomInfo[]
   }
+})
 
-  ws.onmessage = (e: MessageEvent) => {
-    const data = JSON.parse(e.data)
-    if (data.type === "connected") {
-      clientId.value = data.clientId
-    } else if (data.type === "lobbyUpdate") {
-      rooms.value = data.rooms
-    } else if (data.type === "roomCreated") {
-      // Will receive lobbyUpdate via broadcast
-    }
-  }
-
-  ws.onclose = () => {
-    statusText.value = "Disconnected"
-  }
-
-  ws.onerror = () => {
-    statusText.value = "Connection error"
-  }
+// Join lobby as soon as connected
+function handleConnected() {
+  send({ action: "joinLobby" })
 }
+
+// Send createRoom on first message that indicates connected
+// We watch via the composable: on connected, send joinLobby
+// Actually, let's send joinLobby from within the connect handler
+// For now, send it on mount via a watcher
+watch(status, (s) => {
+  if (s === "connected") {
+    send({ action: "joinLobby" })
+  }
+})
 
 function createRoom() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ action: "createRoom" }))
-  }
+  send({ action: "createRoom" })
 }
-
-onMounted(connect)
-onUnmounted(() => {
-  ws?.close()
-})
 </script>
 
 <template>
@@ -65,17 +47,17 @@ onUnmounted(() => {
           <p
             class="text-sm mt-1"
             :class="{
-              'text-green-600': statusText === 'Connected',
-              'text-yellow-600': statusText === 'Connecting...',
-              'text-red-600': statusText.startsWith('Disconnected') || statusText === 'Connection error',
+              'text-green-600': status === 'connected',
+              'text-yellow-600': status === 'connecting',
+              'text-red-600': status === 'error' || status === 'disconnected',
             }"
           >
-            {{ statusText }}
+            {{ status === "connected" ? `Connected: ${clientId}` : status === "connecting" ? "Connecting..." : "Disconnected" }}
           </p>
         </div>
         <button
           @click="createRoom"
-          :disabled="!ws || ws.readyState !== WebSocket.OPEN"
+          :disabled="status !== 'connected'"
           class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           + Create Room
