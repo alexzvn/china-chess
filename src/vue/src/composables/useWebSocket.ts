@@ -48,8 +48,6 @@ export function useWebSocket(onMessage?: (data: Record<string, unknown>) => void
     }, 3000)
   }
 
-  let storedClientId: string | null = null
-
   function send(payload: Record<string, unknown>) {
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(payload))

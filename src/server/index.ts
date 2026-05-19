@@ -19,8 +19,6 @@ const readyConfirmations = new Map<string, Set<string>>()
 function sendToClient(clientId: string, payload: Record<string, unknown>) {
   const raw = clientConnections.get(clientId)
   if (!raw) return
-  // We need to send via the ElysiaWS wrapper. We use raw's send.
-  // The raw is ServerWebSocket, which has send method
   const wsRaw = raw as ServerWebSocket<unknown>
   wsRaw.send(JSON.stringify(payload))
 }
@@ -292,6 +290,70 @@ export function createApp() {
           if (!room) return
           const opponentId = room.playerA === myClientId ? room.playerB! : room.playerA
           sendToClient(opponentId, { type: "drawDeclined" })
+          return
+        }
+
+        if (action === "reclaimRoom" && myClientId) {
+          const roomId = data.roomId as string
+          const originalClientId = data.originalClientId as string
+          const room = getRoom(roomId)
+
+          if (!room) {
+            ws.send(JSON.stringify({ type: "error", message: "Room not found" }))
+            return
+          }
+
+          let role: "playerA" | "playerB" | null = null
+          if (room.playerA === originalClientId) {
+            role = "playerA"
+          } else if (room.playerB === originalClientId) {
+            role = "playerB"
+          }
+
+          if (!role) {
+            ws.send(JSON.stringify({ type: "error", message: "No matching player in room" }))
+            return
+          }
+
+          // Update room player reference to the NEW clientId so subsequent handlers
+          // (startGame, move, resign, etc.) match the current connection.
+          if (role === "playerA") {
+            room.playerA = myClientId
+          } else {
+            room.playerB = myClientId
+          }
+
+          // Map the new clientId to the WebSocket for sendToClient routing
+          clientConnections.set(myClientId, ws.raw)
+          // Remove stale mapping for the old clientId
+          clientConnections.delete(originalClientId)
+          // Update the weakmap so this ws.raw maps to the new clientId
+          clientIds.set(ws.raw, myClientId)
+
+          sendToClient(myClientId, { type: "roomReclaimed", role, roomId })
+
+          // If game already started, send current board state
+          if (room.gameState) {
+            const color = role === "playerA" ? room.colors!.a : room.colors!.b
+            const opponentId = role === "playerA" ? room.playerB! : room.playerA
+
+            sendToClient(myClientId, {
+              type: "gameStart",
+              yourColor: color,
+              roomId,
+              opponentId,
+            })
+            sendToClient(myClientId, {
+              type: "boardUpdate",
+              board: room.gameState.board,
+              turn: room.gameState.turn,
+              moveCount: room.gameState.moveCount,
+              inCheck: false,
+            })
+
+            // Notify opponent of reconnection
+            sendToClient(opponentId, { type: "opponentReconnected" })
+          }
           return
         }
 

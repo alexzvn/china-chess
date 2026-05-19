@@ -12,8 +12,13 @@ interface RoomInfo {
 }
 
 const rooms = ref<RoomInfo[]>([])
+const router = useRouter()
 
 const { clientId, status, send } = useWebSocket((data) => {
+  if (data.type === "roomCreated") {
+    const roomId = data.roomId as string
+    router.push({ path: `/room/${roomId}`, query: { cid: clientId.value ?? undefined } })
+  }
   if (data.type === "lobbyUpdate") {
     rooms.value = data.rooms as RoomInfo[]
   }
@@ -33,8 +38,6 @@ watch(status, (s) => {
     send({ action: "joinLobby" })
   }
 })
-
-const router = useRouter()
 
 function createRoom() {
   send({ action: "createRoom" })

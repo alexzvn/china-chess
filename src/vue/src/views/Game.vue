@@ -13,6 +13,7 @@ import type { BoardState } from "../composables/useBoard"
 const route = useRoute()
 const router = useRouter()
 const roomId = route.params.id as string
+const originalClientId = route.query.cid as string | undefined
 
 const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, inCheckColor, setBoard, setTurn, setInCheck, clearSelection } = useBoard()
 
@@ -76,12 +77,15 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 })
 
-watch(status, (s) => {
-  if (s === "connected" && roomId) {
-    if (clientId.value) {
-      send({ action: "rejoinRoom", roomId, clientId: clientId.value })
+// Wait for both connected AND clientId to be set before sending room actions
+watch([status, clientId], ([s, cid]) => {
+  if (s === "connected" && cid && roomId) {
+    if (originalClientId) {
+      // Came from Lobby after creating room — reclaim our original player slot
+      send({ action: "reclaimRoom", roomId, originalClientId })
     } else {
-      send({ action: "joinRoom", roomId })
+      // Fresh join or rejoin from bookmark — try rejoining existing game or joining
+      send({ action: "rejoinRoom", roomId, clientId: cid })
     }
   }
 })
@@ -119,6 +123,7 @@ function offerDraw() {
 function acceptDraw() {
   send({ type: "drawAccept", roomId })
   pendingDrawOffer.value = false
+  drawOffered.value = false
 }
 
 function declineDraw() {
