@@ -1,6 +1,7 @@
 import { Elysia, type ElysiaContext } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { nanoid } from "nanoid"
+import { createRoom, getLobbyRooms, getRoom } from "./rooms"
 
 const clientIds = new WeakMap<object, string>()
 
@@ -12,13 +13,44 @@ export function createApp() {
       open(ws) {
         const clientId = nanoid(7)
         clientIds.set(ws.raw, clientId)
+        ws.subscribe("lobby")
         ws.send(JSON.stringify({ type: "connected", clientId }))
       },
       message(ws, message) {
-        // Elysia already JSON-parses messages starting with {, [, ", /
         const data = message as Record<string, unknown>
+
         if (data.type === "ping") {
           ws.send(JSON.stringify({ type: "pong" }))
+          return
+        }
+
+        const action = data.action as string | undefined
+        const clientId = clientIds.get(ws.raw)
+
+        if (action === "createRoom" && clientId) {
+          const room = createRoom(clientId)
+          ws.send(JSON.stringify({ type: "roomCreated", roomId: room.roomId }))
+          const rooms = getLobbyRooms().map((r) => ({
+            roomId: r.roomId,
+            playerA: r.playerA,
+            playerB: r.playerB,
+            status: r.status,
+          }))
+          ws.publish("lobby", JSON.stringify({ type: "lobbyUpdate", rooms }))
+          // Also send to the creator (they're subscribed to lobby)
+          ws.send(JSON.stringify({ type: "lobbyUpdate", rooms }))
+          return
+        }
+
+        if (action === "joinLobby") {
+          const rooms = getLobbyRooms().map((r) => ({
+            roomId: r.roomId,
+            playerA: r.playerA,
+            playerB: r.playerB,
+            status: r.status,
+          }))
+          ws.send(JSON.stringify({ type: "lobbyUpdate", rooms }))
+          return
         }
       },
       close(ws) {
