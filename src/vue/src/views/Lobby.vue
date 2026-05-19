@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue"
+import { useRouter } from "vue-router"
 import RoomCard from "../components/RoomCard.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 
@@ -33,8 +34,14 @@ watch(status, (s) => {
   }
 })
 
+const router = useRouter()
+
 function createRoom() {
   send({ action: "createRoom" })
+}
+
+function joinRoom(roomId: string) {
+  router.push(`/room/${roomId}`)
 }
 </script>
 
@@ -75,6 +82,7 @@ function createRoom() {
           :key="room.roomId"
           :room-id="room.roomId"
           :player-count="room.playerB ? 2 : 1"
+          @join="joinRoom"
         />
       </div>
     </div>

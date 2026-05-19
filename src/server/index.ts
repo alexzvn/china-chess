@@ -1,18 +1,56 @@
 import { Elysia, type ElysiaContext } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { nanoid } from "nanoid"
-import { createRoom, getLobbyRooms, getRoom } from "./rooms"
+import {
+  createRoom,
+  getLobbyRooms,
+  getRoom,
+  joinRoom,
+  startGame,
+} from "./rooms"
+import type { ServerWebSocket } from "bun"
 
 const clientIds = new WeakMap<object, string>()
+const clientConnections = new Map<string, object>()
+const readyConfirmations = new Map<string, Set<string>>()
+
+function sendToClient(clientId: string, payload: Record<string, unknown>) {
+  const raw = clientConnections.get(clientId)
+  if (!raw) return
+  // We need to send via the ElysiaWS wrapper. We use raw's send.
+  // The raw is ServerWebSocket, which has send method
+  const wsRaw = raw as ServerWebSocket<unknown>
+  wsRaw.send(JSON.stringify(payload))
+}
+
+function broadcastLobbyUpdate() {
+  const rooms = getLobbyRooms().map((r) => ({
+    roomId: r.roomId,
+    playerA: r.playerA,
+    playerB: r.playerB,
+    status: r.status,
+  }))
+  const payload = JSON.stringify({ type: "lobbyUpdate", rooms })
+
+  // Publish to lobby topic via Elysia's server
+  const server = app?.server
+  if (server) {
+    server.publish("lobby", payload)
+  }
+}
+
+// Need to keep a reference to the latest app for server.publish
+let app: Elysia | null = null
 
 export function createApp() {
-  return new Elysia()
+  app = new Elysia()
     .get("/", () => "Chinese Chess Server")
     .use(staticPlugin({ dir: "./public" }))
     .ws("/ws", {
       open(ws) {
         const clientId = nanoid(7)
         clientIds.set(ws.raw, clientId)
+        clientConnections.set(clientId, ws.raw)
         ws.subscribe("lobby")
         ws.send(JSON.stringify({ type: "connected", clientId }))
       },
@@ -25,43 +63,100 @@ export function createApp() {
         }
 
         const action = data.action as string | undefined
-        const clientId = clientIds.get(ws.raw)
+        const myClientId = clientIds.get(ws.raw)
 
-        if (action === "createRoom" && clientId) {
-          const room = createRoom(clientId)
+        if (action === "createRoom" && myClientId) {
+          const room = createRoom(myClientId)
           ws.send(JSON.stringify({ type: "roomCreated", roomId: room.roomId }))
-          const rooms = getLobbyRooms().map((r) => ({
-            roomId: r.roomId,
-            playerA: r.playerA,
-            playerB: r.playerB,
-            status: r.status,
+          broadcastLobbyUpdate()
+          ws.send(JSON.stringify({
+            type: "lobbyUpdate",
+            rooms: getLobbyRooms(),
           }))
-          ws.publish("lobby", JSON.stringify({ type: "lobbyUpdate", rooms }))
-          // Also send to the creator (they're subscribed to lobby)
-          ws.send(JSON.stringify({ type: "lobbyUpdate", rooms }))
           return
         }
 
         if (action === "joinLobby") {
-          const rooms = getLobbyRooms().map((r) => ({
-            roomId: r.roomId,
-            playerA: r.playerA,
-            playerB: r.playerB,
-            status: r.status,
+          ws.send(JSON.stringify({
+            type: "lobbyUpdate",
+            rooms: getLobbyRooms(),
           }))
-          ws.send(JSON.stringify({ type: "lobbyUpdate", rooms }))
+          return
+        }
+
+        if (action === "joinRoom" && myClientId) {
+          const roomId = data.roomId as string
+          try {
+            const room = joinRoom(roomId, myClientId)
+            // Notify both players
+            sendToClient(room.playerA, { type: "roomJoined", roomId, player: "A" })
+            sendToClient(room.playerB!, { type: "roomJoined", roomId, player: "B" })
+            broadcastLobbyUpdate()
+          } catch (e) {
+            ws.send(JSON.stringify({
+              type: "error",
+              message: (e as Error).message,
+            }))
+          }
+          return
+        }
+
+        if (action === "startGame" && myClientId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (!room) {
+            ws.send(JSON.stringify({ type: "error", message: "Room not found" }))
+            return
+          }
+
+          if (!readyConfirmations.has(roomId)) {
+            readyConfirmations.set(roomId, new Set())
+          }
+          readyConfirmations.get(roomId)!.add(myClientId)
+
+          // Check if both players have confirmed
+          const bothReady =
+            room.playerB !== null &&
+            readyConfirmations.get(roomId)!.has(room.playerA) &&
+            readyConfirmations.get(roomId)!.has(room.playerB)
+
+          if (bothReady) {
+            const result = startGame(roomId)
+            const colorA = result.colors.a
+            const colorB = result.colors.b
+
+            sendToClient(room.playerA, {
+              type: "gameStart",
+              yourColor: colorA,
+              roomId,
+              opponentId: room.playerB,
+            })
+            sendToClient(room.playerB!, {
+              type: "gameStart",
+              yourColor: colorB,
+              roomId,
+              opponentId: room.playerA,
+            })
+
+            broadcastLobbyUpdate()
+          }
           return
         }
       },
       close(ws) {
         const clientId = clientIds.get(ws.raw) ?? "unknown"
+        clientConnections.delete(clientId)
         console.log(JSON.stringify({
           event: "disconnect",
           clientId,
           timestamp: new Date().toISOString(),
         }))
+        // Broadcast lobby update in case this player was in a waiting room
+        broadcastLobbyUpdate()
       },
     })
+
+  return app
 }
 
 export type App = ReturnType<typeof createApp>

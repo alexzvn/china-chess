@@ -1,13 +1,18 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   roomId: string
   playerCount: number
+}>()
+
+const emit = defineEmits<{
+  join: [roomId: string]
 }>()
 </script>
 
 <template>
   <div
     class="border border-gray-300 rounded-lg px-4 py-3 flex items-center justify-between hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer"
+    @click="emit('join', props.roomId)"
   >
     <div>
       <span class="font-mono text-sm text-gray-500">Room</span>
