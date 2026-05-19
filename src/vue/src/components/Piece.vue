@@ -4,6 +4,7 @@ import { computed } from "vue"
 const props = defineProps<{
   piece: string
   selected?: boolean
+  inCheck?: boolean
 }>()
 
 const isRed = computed(() => props.piece.startsWith("r"))
@@ -16,6 +17,7 @@ const char = computed(() => props.piece.slice(1))
     :class="[
       isRed ? 'text-red-700' : 'text-gray-900',
       selected ? 'ring-2 ring-yellow-400 ring-offset-1' : '',
+      inCheck ? 'ring-2 ring-red-500 shadow-lg shadow-red-500/50' : '',
     ]"
   >
     <div

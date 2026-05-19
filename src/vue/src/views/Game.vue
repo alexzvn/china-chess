@@ -2,6 +2,7 @@
 import { shallowRef, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import Board from "../components/Board.vue"
+import PlayerInfo from "../components/PlayerInfo.vue"
 import { useWebSocket } from "../composables/useWebSocket"
 import { useBoard } from "../composables/useBoard"
 import type { BoardState } from "../composables/useBoard"
@@ -10,7 +11,7 @@ const route = useRoute()
 const router = useRouter()
 const roomId = route.params.id as string
 
-const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, setBoard, setTurn } = useBoard()
+const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, inCheckColor, setBoard, setTurn, setInCheck } = useBoard()
 
 interface GameStartData {
   type: "gameStart"
@@ -35,9 +36,10 @@ const { status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "boardUpdate") {
-    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number }
+    const msg = data as { board: BoardState; turn: "red" | "black"; moveCount: number; inCheck?: boolean }
     setBoard(msg.board)
     setTurn(msg.turn)
+    setInCheck(msg.inCheck ? msg.turn : null)
   }
 
   if (data.type === "error") {
@@ -104,14 +106,19 @@ function onCellClick(rank: number, file: number) {
         <span v-if="myColor === 'red'" class="text-gray-400 ml-2">Red moves first</span>
       </div>
 
-      <Board
-        :board="board"
-        :selected-pos="selectedPos"
-        :legal-moves="legalMoves"
-        :is-legal-target="isLegalTarget"
-        :is-capture-target="isCaptureTarget"
-        @cell-click="onCellClick"
-      />
+      <div class="flex gap-4 items-start">
+        <PlayerInfo color="black" label="Black" :is-active="turn === 'black'" :is-in-check="inCheckColor === 'black'" />
+        <Board
+          :board="board"
+          :selected-pos="selectedPos"
+          :legal-moves="legalMoves"
+          :is-legal-target="isLegalTarget"
+          :is-capture-target="isCaptureTarget"
+          :in-check-color="inCheckColor"
+          @cell-click="onCellClick"
+        />
+        <PlayerInfo color="red" label="Red" :is-active="turn === 'red'" :is-in-check="inCheckColor === 'red'" />
+      </div>
 
       <button @click="backToLobby" class="mt-2 text-sm text-gray-500 hover:text-gray-700 underline">Back to Lobby</button>
     </div>

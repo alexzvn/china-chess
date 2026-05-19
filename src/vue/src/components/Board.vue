@@ -9,6 +9,7 @@ const props = defineProps<{
   legalMoves?: { rank: number; file: number }[]
   isLegalTarget?: (rank: number, file: number) => boolean
   isCaptureTarget?: (rank: number, file: number) => boolean
+  inCheckColor?: "red" | "black" | null
 }>()
 
 const emit = defineEmits<{
@@ -46,6 +47,13 @@ const DOT_POSITIONS: { rank: number; file: number }[] = [
 
 function isSelected(rank: number, file: number): boolean {
   return props.selectedPos?.rank === rank && props.selectedPos?.file === file
+}
+
+function isCheckKing(piece: string | null): boolean {
+  if (!piece || !props.inCheckColor) return false
+  const color = piece.startsWith("r") ? "red" : "black"
+  const type = piece.slice(1)
+  return color === props.inCheckColor && (type === "帥" || type === "將")
 }
 
 const M = 50
@@ -117,7 +125,12 @@ const S = 100
             class="absolute inset-[10%] rounded-full border-3 border-red-500 opacity-80 pointer-events-none z-10"
           />
 
-          <Piece v-if="cell.piece" :piece="cell.piece" :selected="isSelected(cell.rank, cell.file)" />
+          <Piece
+            v-if="cell.piece"
+            :piece="cell.piece"
+            :selected="isSelected(cell.rank, cell.file)"
+            :in-check="isCheckKing(cell.piece)"
+          />
         </div>
       </div>
     </div>

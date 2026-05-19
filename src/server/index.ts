@@ -8,7 +8,7 @@ import {
   joinRoom,
   startGame,
 } from "./rooms"
-import { makeMove } from "./game/engine"
+import { makeMove, isInCheck } from "./game/engine"
 import type { ServerWebSocket } from "bun"
 import type { Position } from "./game/engine"
 
@@ -181,12 +181,14 @@ export function createApp() {
           room.gameState = result
 
           // Broadcast updated board to both players
+          const inCheck = isInCheck(result.board, result.turn)
           const update = {
             type: "boardUpdate",
             board: result.board,
             turn: result.turn,
             moveCount: result.moveCount,
             lastMove: { from, to },
+            inCheck,
           }
           sendToClient(room.playerA, update)
           sendToClient(room.playerB!, update)

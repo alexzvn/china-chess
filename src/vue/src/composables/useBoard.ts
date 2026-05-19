@@ -35,6 +35,7 @@ export function useBoard() {
   const board = ref<BoardState>(createInitialBoard())
   const turn = ref<"red" | "black">("red")
   const selectedPos = ref<Position | null>(null)
+  const inCheckColor = ref<"red" | "black" | null>(null)
 
   const legalMoves = computed<Position[]>(() => {
     if (!selectedPos.value) return []
@@ -52,6 +53,10 @@ export function useBoard() {
   function setTurn(newTurn: "red" | "black") {
     turn.value = newTurn
     clearSelection()
+  }
+
+  function setInCheck(color: "red" | "black" | null) {
+    inCheckColor.value = color
   }
 
   function selectPiece(pos: Position) {
@@ -117,8 +122,10 @@ export function useBoard() {
     turn,
     selectedPos,
     legalMoves,
+    inCheckColor,
     setBoard,
     setTurn,
+    setInCheck,
     selectPiece,
     clearSelection,
     isSelected,
