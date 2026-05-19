@@ -3,15 +3,13 @@ import { shallowRef, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import Board from "../components/Board.vue"
 import { useWebSocket } from "../composables/useWebSocket"
-import { useBoard, createInitialBoard } from "../composables/useBoard"
+import { useBoard } from "../composables/useBoard"
 
 const route = useRoute()
 const router = useRouter()
 const roomId = route.params.id as string
 
-const { board } = useBoard()
-// Start with initial position until gameStart is received
-board.value = createInitialBoard()
+const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick } = useBoard()
 
 interface GameStartData {
   type: "gameStart"
@@ -53,6 +51,10 @@ function confirmStart() {
 function backToLobby() {
   router.push("/")
 }
+
+function onCellClick(rank: number, file: number) {
+  handleCellClick(rank, file)
+}
 </script>
 
 <template>
@@ -60,68 +62,44 @@ function backToLobby() {
     <div v-if="error" class="max-w-md w-full text-center">
       <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
         <p class="text-red-700">{{ error }}</p>
-        <button
-          @click="backToLobby"
-          class="mt-3 text-sm text-blue-600 hover:underline"
-        >
-          Back to Lobby
-        </button>
+        <button @click="backToLobby" class="mt-3 text-sm text-blue-600 hover:underline">Back to Lobby</button>
       </div>
     </div>
 
     <div v-else class="flex flex-col items-center gap-4">
-      <!-- Room info -->
       <div class="text-center">
         <h1 class="text-xl font-bold text-gray-800">
           Room: <span class="font-mono">{{ roomId }}</span>
         </h1>
-        <p
-          v-if="!gameStarted"
-          class="text-sm mt-1"
-          :class="{
-            'text-green-600': status === 'connected',
-            'text-yellow-600': status === 'connecting',
-            'text-red-600': status === 'error',
-          }"
-        >
+        <p v-if="!gameStarted" class="text-sm mt-1" :class="{
+          'text-green-600': status === 'connected',
+          'text-yellow-600': status === 'connecting',
+          'text-red-600': status === 'error',
+        }">
           {{ status === "connected" ? "Connected — waiting for players..." : status }}
         </p>
       </div>
 
-      <!-- Pre-game start screen -->
-      <div
-        v-if="!gameStarted && joined"
-        class="flex gap-4 items-center bg-white border border-gray-200 rounded-lg px-6 py-3 shadow-sm"
-      >
+      <div v-if="!gameStarted && joined" class="flex gap-4 items-center bg-white border border-gray-200 rounded-lg px-6 py-3 shadow-sm">
         <p class="text-gray-700">Both players ready?</p>
-        <button
-          @click="confirmStart"
-          class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
-        >
-          Start Game
-        </button>
+        <button @click="confirmStart" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors">Start Game</button>
       </div>
 
-      <!-- Game started indicator -->
-      <div
-        v-if="gameStarted"
-        class="px-4 py-2 rounded-lg text-sm font-medium"
-        :class="myColor === 'red' ? 'bg-red-50 text-red-700' : 'bg-gray-800 text-white'"
-      >
+      <div v-if="gameStarted" class="px-4 py-2 rounded-lg text-sm font-medium" :class="myColor === 'red' ? 'bg-red-50 text-red-700' : 'bg-gray-800 text-white'">
         You are {{ myColor === "red" ? "Red" : "Black" }}
-        <span class="text-gray-400 ml-2" v-if="myColor === 'red'">Red moves first</span>
+        <span v-if="myColor === 'red'" class="text-gray-400 ml-2">Red moves first</span>
       </div>
 
-      <!-- Board -->
-      <Board :board="board" />
+      <Board
+        :board="board"
+        :selected-pos="selectedPos"
+        :legal-moves="legalMoves"
+        :is-legal-target="isLegalTarget"
+        :is-capture-target="isCaptureTarget"
+        @cell-click="onCellClick"
+      />
 
-      <!-- Back button -->
-      <button
-        @click="backToLobby"
-        class="mt-2 text-sm text-gray-500 hover:text-gray-700 underline"
-      >
-        Back to Lobby
-      </button>
+      <button @click="backToLobby" class="mt-2 text-sm text-gray-500 hover:text-gray-700 underline">Back to Lobby</button>
     </div>
   </div>
 </template>

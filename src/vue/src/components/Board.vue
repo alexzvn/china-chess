@@ -5,6 +5,14 @@ import type { BoardState } from "../composables/useBoard"
 
 const props = defineProps<{
   board: BoardState
+  selectedPos?: { rank: number; file: number } | null
+  legalMoves?: { rank: number; file: number }[]
+  isLegalTarget?: (rank: number, file: number) => boolean
+  isCaptureTarget?: (rank: number, file: number) => boolean
+}>()
+
+const emit = defineEmits<{
+  cellClick: [rank: number, file: number]
 }>()
 
 interface CellPos {
@@ -36,111 +44,80 @@ const DOT_POSITIONS: { rank: number; file: number }[] = [
   { rank: 7, file: 0 }, { rank: 7, file: 4 }, { rank: 7, file: 8 },
 ]
 
-function isDot(rank: number, file: number): boolean {
-  return DOT_POSITIONS.some((d) => d.rank === rank && d.file === file)
+function isSelected(rank: number, file: number): boolean {
+  return props.selectedPos?.rank === rank && props.selectedPos?.file === file
 }
 
-// File number in SVG coordinate: margin + file * spacing
-const M = 50 // margin
-const S = 100 // spacing between intersections
-// Cell center in SVG = (M + file * S, M + rank * S)
-// Board SVG viewBox = "0 0 900 1050" (M on each side + 9*S  + M, M on each side + 10*S + M?)
-// Actually: max X = M + 8*S + M = 50 + 800 + 50 = 900
-// max Y = M + 9*S + M = 50 + 900 + 50 = 1000
-// viewBox = "0 0 900 1000"
+const M = 50
+const S = 100
 </script>
 
 <template>
   <div class="board-wrapper inline-block">
     <div class="board-surface relative overflow-hidden" :style="{ width: '90vmin', height: '100vmin' }">
-      <!-- SVG grid lines — sized to match parent -->
+      <!-- SVG grid lines -->
       <svg
         class="absolute inset-0 w-full h-full pointer-events-none"
         viewBox="0 0 900 1000"
         preserveAspectRatio="none"
       >
-        <!-- Horizontal lines — all 10 ranks (pieces sit on intersections) -->
-        <line
-          v-for="r in 10"
-          :key="'h-' + r"
-          :x1="M"
-          :y1="M + (r - 1) * S"
-          :x2="M + 8 * S"
-          :y2="M + (r - 1) * S"
-          stroke="#8B7355"
-          stroke-width="2"
-        />
-        <!-- Left edge vertical (file 0) -- full height -->
+        <!-- Horizontal lines -->
+        <line v-for="r in 10" :key="'h-' + r" :x1="M" :y1="M + (r - 1) * S" :x2="M + 8 * S" :y2="M + (r - 1) * S" stroke="#8B7355" stroke-width="2" />
+        <!-- Edges -->
         <line :x1="M" :y1="M" :x2="M" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
-        <!-- Right edge vertical (file 8) -- full height -->
         <line :x1="M + 8 * S" :y1="M" :x2="M + 8 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
-        <!-- Inner verticals — top half (black side, ranks 0-4) -->
-        <line
-          v-for="f in 7"
-          :key="'vl-' + f"
-          :x1="M + f * S"
-          :y1="M"
-          :x2="M + f * S"
-          :y2="M + 4 * S"
-          stroke="#8B7355"
-          stroke-width="2"
-        />
-        <!-- Inner verticals — bottom half (red side, ranks 5-9) -->
-        <line
-          v-for="f in 7"
-          :key="'vu-' + f"
-          :x1="M + f * S"
-          :y1="M + 5 * S"
-          :x2="M + f * S"
-          :y2="M + 9 * S"
-          stroke="#8B7355"
-          stroke-width="2"
-        />
-        <!-- Palace diagonals — black side (top, ranks 0-2) -->
+        <!-- Inner verticals — top half -->
+        <line v-for="f in 7" :key="'vl-' + f" :x1="M + f * S" :y1="M" :x2="M + f * S" :y2="M + 4 * S" stroke="#8B7355" stroke-width="2" />
+        <!-- Inner verticals — bottom half -->
+        <line v-for="f in 7" :key="'vu-' + f" :x1="M + f * S" :y1="M + 5 * S" :x2="M + f * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
+        <!-- Palace diagonals -->
         <line x1="M + 3 * S" :y1="M + 0 * S" x2="M + 5 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
         <line x1="M + 5 * S" :y1="M + 0 * S" x2="M + 3 * S" :y2="M + 2 * S" stroke="#8B7355" stroke-width="2" />
-        <!-- Palace diagonals — red side (bottom, ranks 7-9) -->
         <line x1="M + 3 * S" :y1="M + 7 * S" x2="M + 5 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
         <line x1="M + 5 * S" :y1="M + 7 * S" x2="M + 3 * S" :y2="M + 9 * S" stroke="#8B7355" stroke-width="2" />
         <!-- Point dots -->
-        <circle
-          v-for="dot in DOT_POSITIONS"
-          :key="'dot-' + dot.rank + '-' + dot.file"
-          :cx="M + dot.file * S"
-          :cy="M + dot.rank * S"
-          r="5"
-          fill="#8B7355"
-        />
+        <circle v-for="dot in DOT_POSITIONS" :key="'dot-' + dot.rank + '-' + dot.file" :cx="M + dot.file * S" :cy="M + dot.rank * S" r="5" fill="#8B7355" />
       </svg>
 
       <!-- River text -->
-      <div
-        class="absolute left-0 right-0 flex items-center justify-center pointer-events-none z-10 select-none"
-        :style="{ top: M + 4.5 * S + 'px', height: S + 'px', marginTop: -S / 2 + 'px', left: M + 'px', right: M + 'px' }"
-      >
-        <span class="text-3xl font-bold text-amber-800 tracking-[1em] opacity-40">
-          楚河　　漢界
-        </span>
+      <div class="absolute left-0 right-0 flex items-center justify-center pointer-events-none z-10 select-none" :style="{ top: M + 4.5 * S + 'px', height: S + 'px', marginTop: -S / 2 + 'px', left: M + 'px', right: M + 'px' }">
+        <span class="text-3xl font-bold text-amber-800 tracking-[1em] opacity-40">楚河　　漢界</span>
       </div>
 
-      <!-- Pieces grid — overlay on top -->
+      <!-- Pieces grid -->
       <div
         class="absolute grid z-20"
         :style="{
           gridTemplateColumns: 'repeat(9, 1fr)',
           gridTemplateRows: 'repeat(10, 1fr)',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
+          top: 0, left: 0, width: '100%', height: '100%',
         }"
       >
         <div
           v-for="cell in cells"
           :key="'cell-' + cell.rank + '-' + cell.file"
-          class="flex items-center justify-center"
+          class="flex items-center justify-center relative cursor-pointer"
+          @click="emit('cellClick', cell.rank, cell.file)"
         >
-          <Piece v-if="cell.piece" :piece="cell.piece" />
+          <!-- Selected piece highlight -->
+          <div
+            v-if="isSelected(cell.rank, cell.file)"
+            class="absolute inset-0 rounded-full border-4 border-yellow-400 animate-pulse pointer-events-none z-10"
+          />
+
+          <!-- Legal move: empty target → dot -->
+          <div
+            v-if="props.isLegalTarget?.(cell.rank, cell.file) && !props.isCaptureTarget?.(cell.rank, cell.file)"
+            class="absolute w-[20%] h-[20%] rounded-full bg-green-500 opacity-70 pointer-events-none z-10"
+          />
+
+          <!-- Legal move: capture target → ring -->
+          <div
+            v-if="props.isCaptureTarget?.(cell.rank, cell.file)"
+            class="absolute inset-[10%] rounded-full border-3 border-red-500 opacity-80 pointer-events-none z-10"
+          />
+
+          <Piece v-if="cell.piece" :piece="cell.piece" :selected="isSelected(cell.rank, cell.file)" />
         </div>
       </div>
     </div>

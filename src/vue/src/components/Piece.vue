@@ -3,6 +3,7 @@ import { computed } from "vue"
 
 const props = defineProps<{
   piece: string
+  selected?: boolean
 }>()
 
 const isRed = computed(() => props.piece.startsWith("r"))
@@ -12,7 +13,10 @@ const char = computed(() => props.piece.slice(1))
 <template>
   <div
     class="piece flex items-center justify-center rounded-full select-none"
-    :class="isRed ? 'text-red-700' : 'text-gray-900'"
+    :class="[
+      isRed ? 'text-red-700' : 'text-gray-900',
+      selected ? 'ring-2 ring-yellow-400 ring-offset-1' : '',
+    ]"
   >
     <div
       class="piece-inner flex items-center justify-center rounded-full"
