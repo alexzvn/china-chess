@@ -25,7 +25,9 @@ A full-stack online multiplayer Chinese Chess (象棋/中国象棋) game. Two pl
 - **Stalemate:** The player has no legal moves but the king is not in check — this is a loss.
 - **Red moves first** (traditional Chinese Chess convention).
 - **Pre-game:** The phase after both players join a room but before the game starts. Both players see the board in starting position and toggle their ready state.
-- **Ready state:** A toggleable boolean indicating a player is prepared to start the game. The game transitions from `waiting` to `playing` only when both players are ready.
+- **Ready state:** A toggleable boolean indicating a player is prepared to start the game. Toggled via `toggleReady` client action. The game transitions from `waiting` to `playing` only when both players are ready. Ready can be toggled off (un-ready).
+- **roomUpdate:** Server → client message containing the current player list and their ready states. Sent on room creation, player join, ready toggle, and reconnection.
+- **Board flip:** The board renders 180° rotated when the player is assigned Black. Both ranks and files are mirrored (`9 - rank`, `8 - file`) so Black's pieces appear at the bottom. This is a pure rendering concern — engine coordinates remain 0-indexed regardless of flip.
 
 ## Architecture Overview
 
@@ -44,8 +46,10 @@ chess/
         Piece.vue       — Individual piece rendering
         RoomCard.vue    — Lobby room entry card
         ChatPanel.vue   — Chat messages and input
-        PlayerInfo.vue  — Player color and status display
-        SidePanel.vue    — Side panel with player info, ready status, and chat
+        SidePanel.vue   — Side panel (dual-mode: pre-game player list with ready
+        │                  status, or in-game player turn/check info) + chat
+        Board.vue       — Chess board grid with 180° flip support
+        Piece.vue       — Individual piece rendering
       views/
         Lobby.vue       — Room listing and create room
         Game.vue        — Full game view (board + chat + info)
