@@ -37,7 +37,7 @@ export function handleRejoinRoom(ctx: RoomActionContext): ActionResult {
 
   const notifications: Notification[] = [
     { kind: "send" as const, clientId: ctx.clientId, message: { type: "gameStart" as const, yourColor: color, roomId: ctx.roomId, opponentId } },
-    { kind: "send" as const, clientId: ctx.clientId, message: { type: "boardUpdate" as const, board: ctx.room.gameState.board, turn: ctx.room.gameState.turn, moveCount: ctx.room.gameState.moveCount, inCheck: false } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "boardUpdate" as const, board: ctx.room.gameState.board, turn: ctx.room.gameState.turn, moveCount: ctx.room.gameState.moveCount, lastMove: ctx.room.gameState.lastMove, inCheck: false } },
     { kind: "send" as const, clientId: opponentId, message: { type: "opponentReconnected" as const } },
   ]
 

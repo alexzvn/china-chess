@@ -179,6 +179,7 @@ export interface GameState {
   board: Board
   turn: "red" | "black"
   moveCount: number
+  lastMove?: { from: Position; to: Position }
 }
 
 /** Deep-clone a board */
@@ -329,5 +330,6 @@ export function makeMove(
     board: newBoard,
     turn: state.turn === "red" ? "black" : "red",
     moveCount: state.moveCount + 1,
+    lastMove: { from, to },
   }
 }

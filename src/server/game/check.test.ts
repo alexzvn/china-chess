@@ -180,4 +180,14 @@ describe("makeMove", () => {
     const result = makeMove(state, { rank: 5, file: 0 }, { rank: 5, file: 5 })
     expect(result).toBeNull()
   })
+
+  it("stores lastMove in returned state", () => {
+    const b = emptyBoard()
+    place(b, 5, 0, "r車")
+    const state: GameState = { board: b, turn: "red", moveCount: 0 }
+
+    const result = makeMove(state, { rank: 5, file: 0 }, { rank: 5, file: 5 })
+    expect(result).not.toBeNull()
+    expect(result!.lastMove).toEqual({ from: { rank: 5, file: 0 }, to: { rank: 5, file: 5 } })
+  })
 })
