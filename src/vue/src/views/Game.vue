@@ -295,10 +295,10 @@ function declineDraw() {
       </div>
 
       <!-- Draw offer notification -->
-      <div v-if="pendingDrawOffer" class="fixed bottom-4 right-4 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2 flex items-center gap-3 shadow-lg z-50">
-        <span class="text-sm text-yellow-800">Opponent offers a draw</span>
-        <button @click="acceptDraw" class="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
-        <button @click="declineDraw" class="text-sm px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Decline</button>
+      <div v-if="pendingDrawOffer" class="fixed bottom-4 right-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 dark:border-yellow-800 rounded-lg px-4 py-2 flex items-center gap-3 shadow-lg z-50">
+        <span class="text-sm text-yellow-800 dark:text-yellow-200">Opponent offers a draw</span>
+        <button @click="acceptDraw" class="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 dark:hover:bg-green-800">Accept</button>
+        <button @click="declineDraw" class="text-sm px-3 py-1 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-600">Decline</button>
       </div>
     </template>
   </div>

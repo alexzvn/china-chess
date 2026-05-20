@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-@variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *)) {
+}
 
 /* Smooth theme transitions */
 *,

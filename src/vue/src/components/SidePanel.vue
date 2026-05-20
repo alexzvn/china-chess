@@ -164,7 +164,7 @@ function hasOpponent(): boolean {
       </div>
 
       <!-- In-game action buttons -->
-      <div v-if="mode === 'in-game'" class="flex gap-2">
+      <div v-if="mode === 'in-game'" class="flex gap-2" style="width: 240px;">
         <button @click="emit('resign')" class="flex-1 text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors">
           Resign
         </button>
