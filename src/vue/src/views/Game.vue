@@ -258,7 +258,7 @@ function declineDraw() {
       <!-- Board + Side Panel layout -->
       <div class="flex flex-col md:flex-row gap-4 items-start justify-center">
         <!-- Board -->
-        <div class="flex flex-col items-center">
+        <div class="flex flex-col items-center self-center md:self-start">
           <Board
             :board="board"
             :flipped="myColor === 'black'"
@@ -274,6 +274,7 @@ function declineDraw() {
 
         <!-- Side Panel -->
         <SidePanel
+          class="self-center md:self-start"
           :mode="mode"
           :players="players"
           :my-client-id="myClientId"

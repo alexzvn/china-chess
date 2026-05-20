@@ -47,7 +47,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 overflow-hidden" style="width: 240px; height: 100%; min-height: 300px">
+  <div class="flex flex-col border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 overflow-hidden w-full" style="height: 100%; min-height: 300px">
     <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
       Chat
     </div>
