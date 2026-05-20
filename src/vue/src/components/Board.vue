@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import Piece from "./Piece.vue"
-import type { BoardState } from "../composables/useBoard"
+import type { BoardState, Position } from "../composables/useBoard"
 
 const props = defineProps<{
   board: BoardState
@@ -11,6 +11,7 @@ const props = defineProps<{
   isLegalTarget?: (rank: number, file: number) => boolean
   isCaptureTarget?: (rank: number, file: number) => boolean
   inCheckColor?: "red" | "black" | null
+  lastMove?: { from: Position; to: Position } | null
 }>()
 
 const emit = defineEmits<{
@@ -122,6 +123,18 @@ const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
           class="flex items-center justify-center relative cursor-pointer"
           @click="emit('cellClick', cell.rank, cell.file)"
         >
+          <!-- Last move "from" highlight -->
+          <div
+            v-if="props.lastMove && cell.rank === props.lastMove.from.rank && cell.file === props.lastMove.from.file"
+            class="absolute inset-0 bg-amber-300/30 dark:bg-amber-600/30 pointer-events-none z-[1]"
+          />
+
+          <!-- Last move "to" highlight -->
+          <div
+            v-if="props.lastMove && cell.rank === props.lastMove.to.rank && cell.file === props.lastMove.to.file"
+            class="absolute inset-0 bg-yellow-300/50 dark:bg-yellow-500/40 pointer-events-none z-[1]"
+          />
+
           <!-- Selected piece highlight -->
           <div
             v-if="isSelected(cell.rank, cell.file)"

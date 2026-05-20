@@ -214,3 +214,34 @@ describe("useBoard composable — game over blocking", () => {
     expect(move).not.toBeNull()
   })
 })
+
+describe("useBoard composable — last move", () => {
+  it("setLastMove stores a move ref, clearLastMove nulls it", () => {
+    const { lastMove, setLastMove, clearLastMove } = useBoard()
+    expect(lastMove.value).toBeNull()
+
+    setLastMove({ from: { rank: 7, file: 1 }, to: { rank: 7, file: 4 } })
+    expect(lastMove.value).toEqual({ from: { rank: 7, file: 1 }, to: { rank: 7, file: 4 } })
+
+    clearLastMove()
+    expect(lastMove.value).toBeNull()
+  })
+
+  it("setBoard does NOT clear lastMove", () => {
+    const { lastMove, setLastMove, setBoard } = useBoard()
+    const move = { from: { rank: 7, file: 1 }, to: { rank: 7, file: 4 } }
+    setLastMove(move)
+
+    setBoard(createInitialBoard())
+    expect(lastMove.value).toEqual(move)
+  })
+
+  it("clearSelection does NOT clear lastMove", () => {
+    const { lastMove, setLastMove, clearSelection } = useBoard()
+    const move = { from: { rank: 0, file: 0 }, to: { rank: 3, file: 3 } }
+    setLastMove(move)
+
+    clearSelection()
+    expect(lastMove.value).toEqual(move)
+  })
+})

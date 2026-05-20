@@ -296,6 +296,56 @@ describe("Board — flipped coordinate transforms", () => {
   })
 })
 
+describe("Board — last move highlight", () => {
+  it("from-square match returns true for lastMove.from", () => {
+    const lastMove = { from: { rank: 7, file: 1 }, to: { rank: 7, file: 4 } }
+    const isFrom = (r: number, f: number) =>
+      lastMove !== null && r === lastMove.from.rank && f === lastMove.from.file
+    expect(isFrom(7, 1)).toBe(true)
+    expect(isFrom(7, 4)).toBe(false)
+    expect(isFrom(0, 0)).toBe(false)
+  })
+
+  it("to-square match returns true for lastMove.to", () => {
+    const lastMove = { from: { rank: 7, file: 1 }, to: { rank: 7, file: 4 } }
+    const isTo = (r: number, f: number) =>
+      lastMove !== null && r === lastMove.to.rank && f === lastMove.to.file
+    expect(isTo(7, 4)).toBe(true)
+    expect(isTo(7, 1)).toBe(false)
+  })
+
+  it("no highlights when lastMove is null", () => {
+    const lastMove = null
+    const hasAnyHighlight = lastMove !== null
+    expect(hasAnyHighlight).toBe(false)
+  })
+
+  it("from and to can be the same cell (shouldn't happen but logic handles it)", () => {
+    const lastMove = { from: { rank: 5, file: 3 }, to: { rank: 5, file: 3 } }
+    const isFrom = (r: number, f: number) =>
+      r === lastMove.from.rank && f === lastMove.from.file
+    const isTo = (r: number, f: number) =>
+      r === lastMove.to.rank && f === lastMove.to.file
+    expect(isFrom(5, 3)).toBe(true)
+    expect(isTo(5, 3)).toBe(true)
+  })
+
+  it("from/to matching works with flipped coordinates (engine-native coords)", () => {
+    // Engine-native coordinates don't change with flip, so matching is invariant
+    const lastMove = { from: { rank: 9, file: 0 }, to: { rank: 7, file: 0 } }
+    // Whether flipped or not, the cell stores engine-native rank/file
+    const isFrom = (r: number, f: number) =>
+      r === lastMove.from.rank && f === lastMove.from.file
+    const isTo = (r: number, f: number) =>
+      r === lastMove.to.rank && f === lastMove.to.file
+    expect(isFrom(9, 0)).toBe(true)
+    expect(isTo(7, 0)).toBe(true)
+    // Other cells don't match
+    expect(isFrom(7, 0)).toBe(false)
+    expect(isTo(9, 0)).toBe(false)
+  })
+})
+
 describe("Board — interaction handling", () => {
   it("emits cellClick with correct rank and file on click", () => {
     let capturedRank = -1

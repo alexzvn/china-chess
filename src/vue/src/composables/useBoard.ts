@@ -36,6 +36,7 @@ export function useBoard() {
   const turn = ref<"red" | "black">("red")
   const selectedPos = ref<Position | null>(null)
   const inCheckColor = ref<"red" | "black" | null>(null)
+  const lastMove = ref<{ from: Position; to: Position } | null>(null)
 
   const legalMoves = computed<Position[]>(() => {
     if (!selectedPos.value) return []
@@ -57,6 +58,14 @@ export function useBoard() {
 
   function setInCheck(color: "red" | "black" | null) {
     inCheckColor.value = color
+  }
+
+  function setLastMove(move: { from: Position; to: Position } | null) {
+    lastMove.value = move
+  }
+
+  function clearLastMove() {
+    lastMove.value = null
   }
 
   function selectPiece(pos: Position) {
@@ -123,9 +132,12 @@ export function useBoard() {
     selectedPos,
     legalMoves,
     inCheckColor,
+    lastMove,
     setBoard,
     setTurn,
     setInCheck,
+    setLastMove,
+    clearLastMove,
     selectPiece,
     clearSelection,
     isSelected,

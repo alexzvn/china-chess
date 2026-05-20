@@ -16,7 +16,7 @@ const router = useRouter()
 const roomId = route.params.id as string
 const originalClientId = route.query.cid as string | undefined
 
-const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, inCheckColor, setBoard, setTurn, setInCheck, clearSelection } = useBoard()
+const { board, turn, selectedPos, legalMoves, isLegalTarget, isCaptureTarget, handleCellClick, inCheckColor, lastMove, setBoard, setTurn, setInCheck, setLastMove, clearLastMove, clearSelection } = useBoard()
 
 const gameStarted = shallowRef(false)
 const gameOver = shallowRef(false)
@@ -46,10 +46,17 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "roomUpdate") {
-    const msg = data as { players: RoomPlayer[] }
+    const msg = data as { players: RoomPlayer[]; roomStatus?: string }
     players.value = msg.players
-    // Set initial board if not yet started
-    if (!gameStarted.value && !gameOver.value) {
+    // Reset game-over state when room resets to waiting (e.g., after rematch)
+    if (msg.roomStatus === "waiting") {
+      gameOver.value = false
+      gameStarted.value = false
+      myColor.value = null
+      setBoard(createInitialBoard())
+      clearLastMove()
+      clearCountdown()
+    } else if (!gameStarted.value && !gameOver.value) {
       setBoard(createInitialBoard())
     }
   }
@@ -65,6 +72,7 @@ const { clientId, status, send } = useWebSocket((data) => {
     setBoard(msg.board)
     setTurn(msg.turn)
     setInCheck(msg.inCheck ? msg.turn : null)
+    setLastMove(msg.lastMove ?? null)
     // Sound effects
     if (msg.inCheck) {
       playSound("check")
@@ -121,6 +129,7 @@ const { clientId, status, send } = useWebSocket((data) => {
     players.value = []
     gameStarted.value = false
     gameOver.value = false
+    clearLastMove()
   }
 
   if (data.type === "rematchState") {
@@ -131,6 +140,7 @@ const { clientId, status, send } = useWebSocket((data) => {
       gameStarted.value = false
       myColor.value = null
       setBoard(createInitialBoard())
+      clearLastMove()
       clearCountdown()
     }
   }
@@ -267,6 +277,7 @@ function declineDraw() {
             :is-legal-target="isLegalTarget"
             :is-capture-target="isCaptureTarget"
             :in-check-color="inCheckColor"
+            :last-move="lastMove"
             :class="{ 'pointer-events-none': !gameStarted || gameOver }"
             @cell-click="onCellClick"
           />

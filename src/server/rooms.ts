@@ -53,7 +53,7 @@ export interface GameStartResult {
   colors: { a: "red" | "black"; b: "red" | "black" }
 }
 
-export function toggleReady(roomId: string, clientId: string): { room: Room; gameStarted: boolean } {
+export function toggleReady(roomId: string, clientId: string): { room: Room } {
   const room = rooms.get(roomId)
   if (!room) throw new Error("Room not found")
 
@@ -75,11 +75,10 @@ export function toggleReady(roomId: string, clientId: string): { room: Room; gam
 
   // Check if both players are ready
   if (room.playerAReady && room.playerBReady && room.playerA && room.playerB) {
-    const result = startGame(roomId)
-    return { room, gameStarted: true }
+    startGame(roomId)
   }
 
-  return { room, gameStarted: false }
+  return { room }
 }
 
 export function startGame(roomId: string): GameStartResult {
@@ -110,6 +109,19 @@ export function getLobbyRooms(): Room[] {
   return Array.from(rooms.values()).filter((r) => r.status === "waiting")
 }
 
+export function findRoomByClientId(clientId: string): Room | undefined {
+  for (const room of rooms.values()) {
+    if (room.playerA === clientId || room.playerB === clientId) {
+      return room
+    }
+  }
+  return undefined
+}
+
+export function deleteRoom(roomId: string): void {
+  rooms.delete(roomId)
+}
+
 export interface RematchResult {
   room: Room
   bothAccepted: boolean
@@ -128,8 +140,10 @@ export function rematch(roomId: string, clientId: string): RematchResult {
     throw new Error("Client not in room")
   }
 
+  const bothAccepted = room.rematchAcceptedA && room.rematchAcceptedB
+
   // If both accepted, reset the room
-  if (room.rematchAcceptedA && room.rematchAcceptedB) {
+  if (bothAccepted) {
     room.playerAReady = false
     room.playerBReady = false
     room.status = "waiting"
@@ -139,15 +153,29 @@ export function rematch(roomId: string, clientId: string): RematchResult {
     room.rematchAcceptedB = false
   }
 
-  return { room, bothAccepted: room.rematchAcceptedA && room.rematchAcceptedB }
+  return { room, bothAccepted }
 }
 
-export function kickPlayer(roomId: string, kickerId: string): Room {
+export function resign(roomId: string, clientId: string): Room {
   const room = rooms.get(roomId)
   if (!room) throw new Error("Room not found")
-  if (kickerId !== room.playerA) throw new Error("Only the host can kick")
-  if (!room.playerB) throw new Error("No player to kick")
+  if (room.status !== "playing") throw new Error("Game not active")
 
+  room.status = "finished"
+  return room
+}
+
+export function leaveRoom(roomId: string, clientId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+
+  if (clientId === room.playerA) {
+    // Host leaves — delete room
+    rooms.delete(roomId)
+    return room
+  }
+
+  // playerB leaves — reset to waiting
   room.playerB = null
   room.playerAReady = false
   room.playerBReady = false
@@ -158,4 +186,23 @@ export function kickPlayer(roomId: string, kickerId: string): Room {
   room.rematchAcceptedB = false
 
   return room
+}
+
+export function kickPlayer(roomId: string, kickerId: string): { room: Room; kickedId: string } {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  if (kickerId !== room.playerA) throw new Error("Only the host can kick")
+  if (!room.playerB) throw new Error("No player to kick")
+
+  const kickedId = room.playerB!
+  room.playerB = null
+  room.playerAReady = false
+  room.playerBReady = false
+  room.status = "waiting"
+  delete room.gameState
+  delete room.colors
+  room.rematchAcceptedA = false
+  room.rematchAcceptedB = false
+
+  return { room, kickedId }
 }

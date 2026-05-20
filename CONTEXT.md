@@ -23,6 +23,7 @@ A full-stack online multiplayer Chinese Chess (象棋/中国象棋) game. Two pl
 - **Check:** The king is under attack by an enemy piece.
 - **Checkmate:** The king is in check and no legal move removes the check.
 - **Stalemate:** The player has no legal moves but the king is not in check — this is a loss.
+- **Last move:** The most recent move played in a game, identified by its `from` and `to` positions. Both players see the source and destination squares highlighted on the board. Persists across piece selection and game-over; cleared only on room reset or a newer move.
 - **Red moves first** (traditional Chinese Chess convention).
 - **Pre-game:** The phase after both players join a room but before the game starts. Both players see the board in starting position and toggle their ready state.
 - **Ready state:** A toggleable boolean indicating a player is prepared to start the game. Toggled via `toggleReady` client action. The game transitions from `waiting` to `playing` only when both players are ready. Ready can be toggled off (un-ready).
@@ -60,12 +61,17 @@ A full-stack online multiplayer Chinese Chess (象棋/中国象棋) game. Two pl
 chess/
   src/
     server/
-      types.ts        — Board, Piece, Move, Room, GameState types
-      game/           — Chinese Chess engine (move validation, check, checkmate)
-        engine.ts     — Move validation, check/checkmate/stalemate detection
-        board.ts      — Board representation and initial position
-      rooms.ts        — Room lifecycle, lobby state
-      index.ts        — Entry point, Elysia app setup, WebSocket message routing
+      protocol.ts       — ServerMessage discriminated union type
+      rooms.ts          — Room module (state machine: create, join, toggleReady, kick, resign, rematch)
+      actions/          — Action adapters (dispatch table)
+        room.ts         — createRoom, joinLobby, joinRoom, kickPlayer, leaveRoom
+        game.ts         — toggleReady, move, resign, drawOffer, drawAccept, drawDecline
+        phase.ts        — rematch, rejoinRoom
+        index.ts        — merges all dispatch tables
+      index.ts          — Entry point, Elysia app setup, thin WebSocket handler
+      game/             — Chinese Chess engine (move validation, check, checkmate)
+        engine.ts       — Move validation, check/checkmate/stalemate detection
+        board.ts        — Board representation and initial position
     vue/
       components/
         Board.vue       — Chess board grid rendering
@@ -85,6 +91,14 @@ chess/
   docs/
     adr/                — Architectural Decision Records
 ```
+
+### Server layers
+
+- **Handler** (`index.ts`): thin dispatch layer (~35 lines). Routes action names to adapters, processes results.
+- **Adapters** (`actions/`): each handles one action. Calls the Room module, reads room state, builds notifications. Returns `ActionResult`.
+- **Room module** (`rooms.ts`): pure state machine. Mutates room state, returns `{ room }`. Does not know about messages or clients.
+- **Engine** (`game/`): pure rule validation. Zero framework dependencies. Can be tested in isolation.
+- **Protocol** (`protocol.ts`): `ServerMessage` discriminated union. Centralized type for all server→client messages.
 
 ## Coding Conventions
 

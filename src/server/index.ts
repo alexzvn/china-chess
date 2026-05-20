@@ -2,18 +2,13 @@ import { Elysia } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { readFileSync, existsSync } from "fs"
 import { nanoid } from "nanoid"
-import {
-  createRoom,
-  getLobbyRooms,
-  getRoom,
-  joinRoom,
-  toggleReady,
-  kickPlayer,
-  rematch,
-} from "./rooms"
-import { makeMove, isInCheck, isCheckmate, isStalemate } from "./game/engine"
+import { getRoom, getLobbyRooms } from "./rooms"
+import type { Room } from "./rooms"
 import type { ServerWebSocket } from "bun"
 import type { Position } from "./game/engine"
+import { allActions } from "./actions/index.js"
+import type { ActionResult } from "./actions/types.js"
+import type { ServerMessage } from "./protocol.js"
 
 const clientIds = new WeakMap<object, string>()
 const clientConnections = new Map<string, object>()
@@ -39,6 +34,103 @@ function broadcastLobbyUpdate() {
   if (server) {
     server.publish("lobby", payload)
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let app: any = null
+
+function serveIndex(): Response {
+  if (existsSync("./public/index.html")) {
+    const html = readFileSync("./public/index.html", "utf-8")
+    return new Response(html, {
+      headers: { "Content-Type": "text/html" },
+    })
+  }
+  return new Response("Chinese Chess Server")
+}
+
+function handleReclaimRoom(
+  ws: any,
+  myClientId: string,
+  data: Record<string, unknown>,
+) {
+  const roomId = data.roomId as string
+  const originalClientId = data.originalClientId as string
+  const room = getRoom(roomId)
+
+  if (!room) {
+    sendToClient(myClientId, { type: "error", message: "Room not found" })
+    return
+  }
+
+  let role: "playerA" | "playerB" | null = null
+  if (room.playerA === originalClientId) {
+    role = "playerA"
+  } else if (room.playerB === originalClientId) {
+    role = "playerB"
+  }
+
+  if (!role) {
+    sendToClient(myClientId, { type: "error", message: "No matching player in room" })
+    return
+  }
+
+  // Update room player reference to the NEW clientId
+  if (role === "playerA") {
+    room.playerA = myClientId
+  } else {
+    room.playerB = myClientId
+  }
+
+  // Map the new clientId to the WebSocket
+  clientConnections.set(myClientId, ws.raw)
+  clientConnections.delete(originalClientId)
+  clientIds.set(ws.raw, myClientId)
+
+  sendToClient(myClientId, { type: "roomReclaimed", role, roomId })
+  broadcastRoomUpdate(roomId)
+
+  // If game already started, send current board state
+  if (room.gameState) {
+    const color = role === "playerA" ? room.colors!.a : room.colors!.b
+    const opponentId = role === "playerA" ? room.playerB! : room.playerA
+
+    sendToClient(myClientId, {
+      type: "gameStart",
+      yourColor: color,
+      roomId,
+      opponentId,
+    })
+    sendToClient(myClientId, {
+      type: "boardUpdate",
+      board: room.gameState.board,
+      turn: room.gameState.turn,
+      moveCount: room.gameState.moveCount,
+      inCheck: false,
+    })
+
+    sendToClient(opponentId, { type: "opponentReconnected" })
+  }
+}
+
+function handleChat(myClientId: string, data: Record<string, unknown>) {
+  const roomId = data.roomId as string
+  const room = getRoom(roomId)
+  if (!room) return
+  const text = data.text as string
+  const isPlayerA = room.playerA === myClientId
+  const color = isPlayerA ? room.colors!.a : room.colors!.b
+  const chatMsg = {
+    type: "chat",
+    message: {
+      sender: myClientId,
+      text,
+      timestamp: Date.now(),
+      color,
+    },
+  }
+  sendToClient(room.playerA, chatMsg)
+  sendToClient(room.playerB!, chatMsg)
 }
 
 function broadcastRoomUpdate(roomId: string) {
@@ -68,19 +160,6 @@ function broadcastRoomUpdate(roomId: string) {
   if (room.playerB) {
     sendToClient(room.playerB, payload)
   }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let app: any = null
-
-function serveIndex(): Response {
-  if (existsSync("./public/index.html")) {
-    const html = readFileSync("./public/index.html", "utf-8")
-    return new Response(html, {
-      headers: { "Content-Type": "text/html" },
-    })
-  }
-  return new Response("Chinese Chess Server")
 }
 
 export function createApp() {
@@ -122,6 +201,7 @@ export function createApp() {
       message(ws, message) {
         const data = message as Record<string, unknown>
 
+        // Protocol-level messages
         if (data.type === "ping") {
           ws.send(JSON.stringify({ type: "pong" }))
           return
@@ -129,428 +209,71 @@ export function createApp() {
 
         const action = data.action as string | undefined
         const myClientId = clientIds.get(ws.raw)
+        if (!myClientId) return
 
-        if (action === "createRoom" && myClientId) {
-          const room = createRoom(myClientId)
-          ws.send(JSON.stringify({ type: "roomCreated", roomId: room.roomId }))
-          broadcastRoomUpdate(room.roomId)
-          broadcastLobbyUpdate()
+        // Connection-layer actions stay inline (mutate clientConnections)
+        if (action === "reclaimRoom") {
+          handleReclaimRoom(ws, myClientId, data)
           return
         }
 
-        if (action === "joinLobby") {
-          ws.send(JSON.stringify({
-            type: "lobbyUpdate",
-            rooms: getLobbyRooms(),
-          }))
+        // Chat uses data.type routing (legacy convention)
+        if (data.type === "chat") {
+          handleChat(myClientId, data)
           return
         }
 
-        if (action === "rejoinRoom" && myClientId) {
+        // Dispatch to action adapters
+        let result: ActionResult
+
+        // No-room actions
+        if (action === "createRoom") {
+          result = allActions.createRoom({
+            clientId: myClientId,
+            send: sendToClient,
+            broadcastLobby: broadcastLobbyUpdate,
+          })
+        } else if (action === "joinLobby") {
+          result = allActions.joinLobby({
+            clientId: myClientId,
+            send: sendToClient,
+            broadcastLobby: broadcastLobbyUpdate,
+          })
+        }
+        // Room actions
+        else if (action && data.roomId) {
           const roomId = data.roomId as string
           const room = getRoom(roomId)
-          if (room && room.gameState && (room.playerA === myClientId || room.playerB === myClientId)) {
-            // Reconnected — send current game state
-            const isPlayerA = room.playerA === myClientId
-            const color = isPlayerA ? room.colors!.a : room.colors!.b
-            sendToClient(myClientId, {
-              type: "gameStart",
-              yourColor: color,
-              roomId,
-              opponentId: isPlayerA ? room.playerB : room.playerA,
-            })
-            sendToClient(myClientId, {
-              type: "boardUpdate",
-              board: room.gameState.board,
-              turn: room.gameState.turn,
-              moveCount: room.gameState.moveCount,
-              inCheck: false,
-            })
-            // Notify opponent of reconnection
-            const opponentId = isPlayerA ? room.playerB! : room.playerA
-            sendToClient(opponentId, { type: "opponentReconnected" })
-          }
-          return
-        }
-
-        if (action === "joinRoom" && myClientId) {
-          const roomId = data.roomId as string
-          try {
-            joinRoom(roomId, myClientId)
-            broadcastRoomUpdate(roomId)
-            broadcastLobbyUpdate()
-          } catch (e) {
-            ws.send(JSON.stringify({
-              type: "error",
-              message: (e as Error).message,
-            }))
-          }
-          return
-        }
-
-        if (action === "kickPlayer" && myClientId) {
-          const roomId = data.roomId as string
-          try {
-            const room = getRoom(roomId)
-            if (!room) throw new Error("Room not found")
-            if (myClientId !== room.playerA) throw new Error("Only the host can kick")
-            if (!room.playerB) throw new Error("No player to kick")
-
-            const kickedId = room.playerB
-            kickPlayer(roomId, myClientId)
-
-            // Notify kicked player
-            sendToClient(kickedId, { type: "kicked", reason: "You were kicked by the host" })
-            // Notify remaining player
-            sendToClient(room.playerA, {
-              type: "roomUpdate",
-              players: [{ clientId: room.playerA, ready: false }],
-              roomStatus: "waiting",
-            })
-            broadcastLobbyUpdate()
-          } catch (e) {
-            ws.send(JSON.stringify({
-              type: "error",
-              message: (e as Error).message,
-            }))
-          }
-          return
-        }
-
-        if (action === "rematch" && myClientId) {
-          const roomId = data.roomId as string
-          try {
-            const room = getRoom(roomId)
-            if (!room) throw new Error("Room not found")
-            if (room.status !== "finished") throw new Error("Game not finished")
-            if (room.playerA !== myClientId && room.playerB !== myClientId) throw new Error("Client not in room")
-
-            const result = rematch(roomId, myClientId)
-
-            // Send rematchState to both players
-            const statePayload = {
-              type: "rematchState",
-              acceptedA: result.room.rematchAcceptedA,
-              acceptedB: result.room.rematchAcceptedB,
-            }
-            sendToClient(room.playerA, statePayload)
-            if (room.playerB) {
-              sendToClient(room.playerB, statePayload)
-            }
-
-            // If both accepted, reset room and notify
-            if (result.bothAccepted) {
-              sendToClient(room.playerA, {
-                type: "roomUpdate",
-                players: [
-                  { clientId: room.playerA, ready: false },
-                  ...(room.playerB ? [{ clientId: room.playerB, ready: false }] : []),
-                ],
-                roomStatus: "waiting",
-              })
-              if (room.playerB) {
-                sendToClient(room.playerB, {
-                  type: "roomUpdate",
-                  players: [
-                    { clientId: room.playerA, ready: false },
-                    { clientId: room.playerB, ready: false },
-                  ],
-                  roomStatus: "waiting",
-                })
-              }
-            }
-          } catch (e) {
-            ws.send(JSON.stringify({
-              type: "error",
-              message: (e as Error).message,
-            }))
-          }
-          return
-        }
-
-        if (action === "leaveRoom" && myClientId) {
-          // Find which room this player is in
-          let foundRoom: Room | undefined
-          for (const room of rooms.values()) {
-            if (room.playerA === myClientId || room.playerB === myClientId) {
-              foundRoom = room
-              break
-            }
-          }
-
-          if (foundRoom) {
-            const room = foundRoom
-            const isHost = room.playerA === myClientId
-
-            if (isHost) {
-              // Host leaves — delete room
-              rooms.delete(room.roomId)
-              // Notify remaining player if any
-              if (room.playerB) {
-                sendToClient(room.playerB, { type: "error", message: "Host left the room" })
-              }
-            } else {
-              // playerB leaves — reset room to waiting
-              room.playerB = null
-              room.playerAReady = false
-              room.playerBReady = false
-              room.status = "waiting"
-              delete room.gameState
-              delete room.colors
-              room.rematchAcceptedA = false
-              room.rematchAcceptedB = false
-              sendToClient(room.playerA, {
-                type: "roomUpdate",
-                players: [{ clientId: room.playerA, ready: false }],
-                roomStatus: "waiting",
-              })
-              broadcastLobbyUpdate()
-            }
-          }
-          return
-        }
-
-        if (action === "toggleReady" && myClientId) {
-          const roomId = data.roomId as string
-          try {
-            const { gameStarted } = toggleReady(roomId, myClientId)
-            broadcastRoomUpdate(roomId)
-
-            if (gameStarted) {
-              const room = getRoom(roomId)!
-              sendToClient(room.playerA, {
-                type: "gameStart",
-                yourColor: room.colors!.a,
-                roomId,
-                opponentId: room.playerB,
-              })
-              sendToClient(room.playerB!, {
-                type: "gameStart",
-                yourColor: room.colors!.b,
-                roomId,
-                opponentId: room.playerA,
-              })
-              broadcastLobbyUpdate()
-            }
-          } catch (e) {
-            ws.send(JSON.stringify({
-              type: "error",
-              message: (e as Error).message,
-            }))
-          }
-          return
-        }
-
-        if (action === "move" && myClientId) {
-          const roomId = data.roomId as string
-          const from = data.from as Position
-          const to = data.to as Position
-          const room = getRoom(roomId)
-
-          if (!room || room.status !== "playing" || !room.gameState) {
-            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Game not active" }))
-            return
-          }
-
-          // Check client is a player in this room
-          if (room.playerA !== myClientId && room.playerB !== myClientId) {
-            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Not your game" }))
-            return
-          }
-
-          // Determine client's color
-          const isPlayerA = room.playerA === myClientId
-          const myColor = isPlayerA ? room.colors!.a : room.colors!.b
-
-          // Check turn
-          if (room.gameState.turn !== myColor) {
-            ws.send(JSON.stringify({ type: "error", code: "NOT_YOUR_TURN", message: "Not your turn" }))
-            return
-          }
-
-          // Validate and apply move
-          const result = makeMove(room.gameState, from, to)
-          if (!result) {
-            ws.send(JSON.stringify({ type: "error", code: "INVALID_MOVE", message: "Illegal move" }))
-            return
-          }
-
-          room.gameState = result
-
-          // Broadcast updated board to both players
-          const inCheck = isInCheck(result.board, result.turn)
-          const update = {
-            type: "boardUpdate",
-            board: result.board,
-            turn: result.turn,
-            moveCount: result.moveCount,
-            lastMove: { from, to },
-            inCheck,
-          }
-          sendToClient(room.playerA, update)
-          sendToClient(room.playerB!, update)
-
-          // Check for checkmate or stalemate
-          const winner =
-            isCheckmate(result.board, result.turn)
-              ? { result: "checkmate", winnerColor: result.turn === "red" ? "black" : "red" }
-              : isStalemate(result.board, result.turn)
-                ? { result: "stalemate", winnerColor: result.turn === "red" ? "black" : "red" }
-                : null
-
-          if (winner) {
-            room.status = "finished"
-            const endMsg = {
-              type: "gameEnd",
-              result: winner.result,
-              winnerColor: winner.winnerColor,
-              reason: `Checkmate! ${winner.winnerColor === "red" ? "Red" : "Black"} wins`,
-              expiresAt: Date.now() + 30000,
-            }
-            sendToClient(room.playerA, endMsg)
-            sendToClient(room.playerB!, endMsg)
-            broadcastLobbyUpdate()
-          }
-          return
-        }
-
-        if (action === "resign" && myClientId) {
-          const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room || room.status !== "playing") {
-            ws.send(JSON.stringify({ type: "error", message: "Game not active" }))
-            return
-          }
-          room.status = "finished"
-          const winnerColor = room.playerA === myClientId
-            ? room.colors!.b : room.colors!.a
-          const endMsg = {
-            type: "gameEnd",
-            result: "resign",
-            winnerColor,
-            reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`,
-            expiresAt: Date.now() + 30000,
-          }
-          sendToClient(room.playerA, endMsg)
-          sendToClient(room.playerB!, endMsg)
-          broadcastLobbyUpdate()
-          return
-        }
-
-        if (data.type === "drawOffer" && myClientId) {
-          const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room || room.status !== "playing") return
-          const opponentId = room.playerA === myClientId ? room.playerB! : room.playerA
-          sendToClient(opponentId, { type: "drawOffered", fromClientId: myClientId })
-          return
-        }
-
-        if (data.type === "drawAccept" && myClientId) {
-          const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room || room.status !== "playing") return
-          room.status = "finished"
-          const endMsg = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
-          sendToClient(room.playerA, endMsg)
-          sendToClient(room.playerB!, endMsg)
-          broadcastLobbyUpdate()
-          return
-        }
-
-        if (data.type === "drawDecline" && myClientId) {
-          const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room) return
-          const opponentId = room.playerA === myClientId ? room.playerB! : room.playerA
-          sendToClient(opponentId, { type: "drawDeclined" })
-          return
-        }
-
-        if (action === "reclaimRoom" && myClientId) {
-          const roomId = data.roomId as string
-          const originalClientId = data.originalClientId as string
-          const room = getRoom(roomId)
-
           if (!room) {
-            ws.send(JSON.stringify({ type: "error", message: "Room not found" }))
-            return
-          }
-
-          let role: "playerA" | "playerB" | null = null
-          if (room.playerA === originalClientId) {
-            role = "playerA"
-          } else if (room.playerB === originalClientId) {
-            role = "playerB"
-          }
-
-          if (!role) {
-            ws.send(JSON.stringify({ type: "error", message: "No matching player in room" }))
-            return
-          }
-
-          // Update room player reference to the NEW clientId so subsequent handlers
-          // (startGame, move, resign, etc.) match the current connection.
-          if (role === "playerA") {
-            room.playerA = myClientId
+            result = { kind: "error", message: "Room not found" }
           } else {
-            room.playerB = myClientId
+            const handler = allActions[action as keyof typeof allActions]
+            if (!handler) {
+              result = { kind: "error", message: "Unknown action" }
+            } else {
+              result = handler({
+                roomId,
+                clientId: myClientId,
+                room,
+                from: data.from as Position | undefined,
+                to: data.to as Position | undefined,
+                send: sendToClient,
+                broadcastLobby: broadcastLobbyUpdate,
+              })
+            }
           }
-
-          // Map the new clientId to the WebSocket for sendToClient routing
-          clientConnections.set(myClientId, ws.raw)
-          // Remove stale mapping for the old clientId
-          clientConnections.delete(originalClientId)
-          // Update the weakmap so this ws.raw maps to the new clientId
-          clientIds.set(ws.raw, myClientId)
-
-          sendToClient(myClientId, { type: "roomReclaimed", role, roomId })
-          broadcastRoomUpdate(roomId)
-
-          // If game already started, send current board state
-          if (room.gameState) {
-            const color = role === "playerA" ? room.colors!.a : room.colors!.b
-            const opponentId = role === "playerA" ? room.playerB! : room.playerA
-
-            sendToClient(myClientId, {
-              type: "gameStart",
-              yourColor: color,
-              roomId,
-              opponentId,
-            })
-            sendToClient(myClientId, {
-              type: "boardUpdate",
-              board: room.gameState.board,
-              turn: room.gameState.turn,
-              moveCount: room.gameState.moveCount,
-              inCheck: false,
-            })
-
-            // Notify opponent of reconnection
-            sendToClient(opponentId, { type: "opponentReconnected" })
-          }
-          return
+        } else {
+          result = { kind: "error", message: "Unknown action" }
         }
 
-        if (data.type === "chat" && myClientId) {
-          const roomId = data.roomId as string
-          const room = getRoom(roomId)
-          if (!room) return
-          const text = data.text as string
-          const isPlayerA = room.playerA === myClientId
-          const color = isPlayerA ? room.colors!.a : room.colors!.b
-          const chatMsg = {
-            type: "chat",
-            message: {
-              sender: myClientId,
-              text,
-              timestamp: Date.now(),
-              color,
-            },
-          }
-          sendToClient(room.playerA, chatMsg)
-          sendToClient(room.playerB!, chatMsg)
-          return
+        // Process result
+        if (result.kind === "error") {
+          sendToClient(myClientId, { type: "error", message: result.message })
+        } else {
+          result.notifications.forEach((n) => {
+            if (n.kind === "send") sendToClient(n.clientId, n.message)
+            else if (n.kind === "broadcastLobby") broadcastLobbyUpdate()
+          })
         }
       },
       close(ws) {

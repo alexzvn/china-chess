@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { createRoom, getRoom, getLobbyRooms, joinRoom, startGame, toggleReady, kickPlayer, rematch } from "./rooms"
+import { createRoom, getRoom, getLobbyRooms, joinRoom, startGame, toggleReady, kickPlayer, rematch, resign, leaveRoom } from "./rooms"
 
 describe("Rooms", () => {
   it("creates a room with waiting status and the creator as playerA", () => {
@@ -123,21 +123,19 @@ describe("Rooms", () => {
       expect(room.playerBReady).toBe(false)
     })
 
-    it("returns gameStarted=false when only one player ready", () => {
+    it("returns room with status=waiting when only one player ready", () => {
       const room = createRoom("client-a")
       joinRoom(room.roomId, "client-b")
       const result = toggleReady(room.roomId, "client-a")
-      expect(result.gameStarted).toBe(false)
-      expect(room.status).toBe("waiting")
+      expect(result.room.status).toBe("waiting")
     })
 
-    it("returns gameStarted=true when both players ready", () => {
+    it("starts game when both players ready", () => {
       const room = createRoom("client-a")
       joinRoom(room.roomId, "client-b")
 
       toggleReady(room.roomId, "client-a")
-      const result = toggleReady(room.roomId, "client-b")
-      expect(result.gameStarted).toBe(true)
+      toggleReady(room.roomId, "client-b")
       expect(room.status).toBe("playing")
     })
 
@@ -146,12 +144,11 @@ describe("Rooms", () => {
       joinRoom(room.roomId, "client-b")
 
       toggleReady(room.roomId, "client-a")
-      let result = toggleReady(room.roomId, "client-b")
-      expect(result.gameStarted).toBe(true)
+      toggleReady(room.roomId, "client-b")
+      expect(room.status).toBe("playing")
 
       // Unready playerB
-      result = toggleReady(room.roomId, "client-b")
-      expect(result.gameStarted).toBe(false)
+      toggleReady(room.roomId, "client-b")
       expect(room.status).toBe("waiting")
     })
 
@@ -250,6 +247,81 @@ describe("Rooms", () => {
       const room = createRoom("client-a")
       joinRoom(room.roomId, "client-b")
       expect(() => rematch(room.roomId, "client-a")).toThrow("Game not finished")
+    })
+  })
+
+  describe("resign", () => {
+    it("sets game status to finished and determines winner", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      toggleReady(room.roomId, "client-a")
+      toggleReady(room.roomId, "client-b")
+
+      const colorsBefore = getRoom(room.roomId)!.colors!
+      const result = resign(room.roomId, "client-a")
+
+      expect(result.status).toBe("finished")
+      // client-a resigned; winner is client-a's opponent's color
+      const opponentColor = colorsBefore.a === "red" ? "black" : "red"
+      expect(result.colors!.a).toBe(colorsBefore.a)
+      expect(result.colors!.b).toBe(colorsBefore.b)
+    })
+
+    it("preserves room colors when game ends", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      toggleReady(room.roomId, "client-a")
+      toggleReady(room.roomId, "client-b")
+
+      const colorsBefore = getRoom(room.roomId)!.colors!
+      const result = resign(room.roomId, "client-b")
+
+      expect(result.colors!.a).toBe(colorsBefore.a)
+      expect(result.colors!.b).toBe(colorsBefore.b)
+    })
+
+    it("throws if room not found", () => {
+      expect(() => resign("nonexistent", "client-a")).toThrow("Room not found")
+    })
+
+    it("throws if game not active", () => {
+      const room = createRoom("client-a")
+      expect(() => resign(room.roomId, "client-a")).toThrow("Game not active")
+    })
+  })
+
+  describe("leaveRoom", () => {
+    it("deletes room when host leaves", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      toggleReady(room.roomId, "client-a")
+      toggleReady(room.roomId, "client-b")
+
+      leaveRoom(room.roomId, "client-a")
+
+      expect(getRoom(room.roomId)).toBeUndefined()
+    })
+
+    it("resets room to waiting when playerB leaves", () => {
+      const room = createRoom("client-a")
+      joinRoom(room.roomId, "client-b")
+      toggleReady(room.roomId, "client-a")
+      toggleReady(room.roomId, "client-b")
+
+      leaveRoom(room.roomId, "client-b")
+
+      const updated = getRoom(room.roomId)!
+      expect(updated.status).toBe("waiting")
+      expect(updated.playerB).toBeNull()
+      expect(updated.playerA).toBe("client-a")
+      expect(updated.playerAReady).toBe(false)
+      expect(updated.playerBReady).toBe(false)
+      expect(updated.gameState).toBeUndefined()
+      expect(updated.colors).toBeUndefined()
+    })
+
+    it("throws if room not found", () => {
+      expect(() => leaveRoom("nonexistent", "client-a")).toThrow("Room not found")
     })
   })
 })
