@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile
 
 # Copy source and build
 COPY src/vue ./src/vue
-RUN cd src/vue && bun run build:vue
+RUN bun run build:vue
 
 # ---- Stage 2: Production ----
 FROM oven/bun:1-alpine AS production
