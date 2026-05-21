@@ -49,6 +49,7 @@ const char = computed(() => props.piece.slice(1))
 }
 
 .piece-char {
-  font-size: clamp(14px, 3.5vmin, 28px);
+  font-family: 'LXGW WenKai TC', 'KaiTi', 'STKaiti', '楷体', serif;
+  font-size: clamp(22px, 5vmin, 32px);
 }
 </style>

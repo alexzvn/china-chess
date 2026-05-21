@@ -123,16 +123,16 @@ const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
           class="flex items-center justify-center relative cursor-pointer"
           @click="emit('cellClick', cell.rank, cell.file)"
         >
-          <!-- Last move "from" highlight -->
+          <!-- Last move "from" highlight (small dot) -->
           <div
             v-if="props.lastMove && cell.rank === props.lastMove.from.rank && cell.file === props.lastMove.from.file"
-            class="absolute inset-0 bg-amber-300/30 dark:bg-amber-600/30 pointer-events-none z-[1]"
+            class="absolute inset-[35%] rounded-full border-3 border-amber-700/40 dark:border-amber-400/40 pointer-events-none z-[1]"
           />
 
-          <!-- Last move "to" highlight -->
+          <!-- Last move "to" highlight (outer ring) -->
           <div
             v-if="props.lastMove && cell.rank === props.lastMove.to.rank && cell.file === props.lastMove.to.file"
-            class="absolute inset-0 bg-yellow-300/50 dark:bg-yellow-500/40 pointer-events-none z-[1]"
+            class="absolute inset-[5%] rounded-full border-3 border-amber-700/50 dark:border-amber-400/50 pointer-events-none z-[1]"
           />
 
           <!-- Selected piece highlight -->
