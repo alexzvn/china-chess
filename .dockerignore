@@ -1,0 +1,10 @@
+node_modules
+src/vue/node_modules
+.git
+.vscode
+dist
+public
+bun.lockb
+.env
+.dockerignore
+Dockerfile

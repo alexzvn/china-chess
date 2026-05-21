@@ -68,6 +68,16 @@ Open [http://localhost:3000](http://localhost:3000).
 bun test
 ```
 
+### Docker
+
+```bash
+# Build and run with Docker
+docker build -t chinese-chess .
+docker run -p 3000:3000 chinese-chess
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
 ## WebSocket Protocol
 
 All messages are JSON. The server assigns a `clientId` (nanoid 7 chars) on connection.
