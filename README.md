@@ -1,5 +1,7 @@
 # Chinese Chess Online (象棋)
 
+🤖 Built 100% with AI
+
 A full-stack online multiplayer Chinese Chess game built with Bun, ElysiaJS, Vue 3, and Tailwind CSS.
 
 ## Tech Stack
@@ -46,24 +48,22 @@ A full-stack online multiplayer Chinese Chess game built with Bun, ElysiaJS, Vue
 └─────────────────────────────────────────────┘
 ```
 
-## Setup
+## Getting Started
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 bun install
 
-# Development — two terminals:
-# Terminal 1: Vue dev server (hot reload)
-cd src/vue && vite
+# 2. Build Vue UI
+bun run build:vue
 
-# Terminal 2: Bun server (auto-restart)
-bun run src/server/index.ts
+# 3. Start server (serves built Vue app + WebSocket)
+bun run start
+```
 
-# Production build
-cd src/vue && vite build
-# Then start the server (serves built Vue app + WebSocket)
-bun run src/server/index.ts
+Open [http://localhost:3000](http://localhost:3000).
 
+```bash
 # Run tests
 bun test
 ```
