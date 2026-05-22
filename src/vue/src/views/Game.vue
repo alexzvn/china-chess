@@ -375,11 +375,11 @@ function confirmForfeit() {
             </div>
           </div>
 
-          <!-- Back to Lobby — at bottom of board column during active game -->
-          <div v-if="gameStarted && !gameOver && !isSpectator" class="mt-3">
+          <!-- Back to Lobby — visible whenever player is in a room (not spectating, not game-over) -->
+          <div v-if="!gameOver && !isSpectator" class="mt-3">
             <button
-              @click="showForfeitConfirm = true"
-              class="text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+              @click="gameStarted ? (showForfeitConfirm = true) : backToLobby()"
+              class="text-xs px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               Back to Lobby
             </button>
@@ -421,10 +421,13 @@ function confirmForfeit() {
       <!-- Forfeit confirmation dialog -->
       <div v-if="showForfeitConfirm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
-          <p class="text-gray-800 dark:text-gray-200 font-medium mb-4">Are you sure? You'll forfeit the game.</p>
+          <p class="text-gray-800 dark:text-gray-200 font-medium mb-4">
+            <template v-if="gameStarted">Are you sure? You'll forfeit the game.</template>
+            <template v-else>Leave the room?</template>
+          </p>
           <div class="flex gap-2 justify-end">
             <button @click="showForfeitConfirm = false" class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
-            <button @click="confirmForfeit" class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors">Forfeit</button>
+            <button @click="confirmForfeit" class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors">{{ gameStarted ? 'Forfeit' : 'Leave' }}</button>
           </div>
         </div>
       </div>
