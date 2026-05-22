@@ -1,6 +1,7 @@
 import { toggleReady, resign, applyTimeControl, getTimeUpdate, isTimeOut, timeControlSettings } from "../rooms"
 import { getClientName } from "../clientNames"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "../game/engine"
+import { getPositionKey, isPerpetualChase, isInsufficientMaterial } from "../game/rules"
 import type { ServerMessage } from "../protocol"
 import type { RoomActionContext, ActionResult, Notification } from "./types"
 

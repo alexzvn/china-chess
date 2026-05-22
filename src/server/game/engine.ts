@@ -180,6 +180,27 @@ export interface GameState {
   turn: "red" | "black"
   moveCount: number
   lastMove?: { from: Position; to: Position }
+  positionHistory?: string[]
+}
+
+/** Check if the two generals face each other on the same file */
+function areGeneralsFacing(board: Board): boolean {
+  const redKing = findKing(board, "red")
+  const blackKing = findKing(board, "black")
+  if (!redKing || !blackKing) return false
+  
+  // Must be on same file
+  if (redKing.file !== blackKing.file) return false
+  
+  // Check if there are any pieces between them on that file
+  const minRank = Math.min(redKing.rank, blackKing.rank)
+  const maxRank = Math.max(redKing.rank, blackKing.rank)
+  for (let r = minRank + 1; r < maxRank; r++) {
+    if (board[r]![redKing.file]) return false // Something blocking
+  }
+  
+  // Nothing between them → facing!
+  return true
 }
 
 /** Deep-clone a board */
@@ -251,7 +272,8 @@ export function getLegalMoves(board: Board, pos: Position): Position[] {
       sim[pos.rank]![pos.file] = null
 
       // Check if own king would be in check
-      if (!isInCheck(sim, color)) {
+      // Also check that generals don't face each other
+      if (!isInCheck(sim, color) && !areGeneralsFacing(sim)) {
         results.push(to)
       }
     }
