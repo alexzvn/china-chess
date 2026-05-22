@@ -3,6 +3,7 @@ import { ref, computed, nextTick, watch } from "vue"
 
 export interface ChatMessage {
   sender: string
+  senderName: string
   text: string
   timestamp: number
   color: "red" | "black"
@@ -54,7 +55,7 @@ watch(
     <div ref="listRef" class="flex-1 overflow-y-auto p-2 space-y-1">
       <div v-for="(msg, i) in messages" :key="i" class="text-sm">
         <span class="font-medium" :class="msg.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'">
-          {{ msg.color === "red" ? "Red" : "Black" }}:
+          {{ msg.senderName || msg.sender.slice(0, 5) }} ({{ msg.color === "red" ? "Red" : "Black" }}):
         </span>
         <span class="text-gray-700 dark:text-gray-300 ml-1">{{ msg.text }}</span>
       </div>

@@ -3,6 +3,7 @@ import { staticPlugin } from "@elysiajs/static"
 import { readFileSync, existsSync } from "fs"
 import { nanoid } from "nanoid"
 import { getRoom, getLobbyRooms } from "./rooms"
+import { handleSetName, getClientName } from "./clientNames"
 import type { Room } from "./rooms"
 import type { ServerWebSocket } from "bun"
 import type { Position } from "./game/engine"
@@ -124,6 +125,7 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
     type: "chat",
     message: {
       sender: myClientId,
+      senderName: getClientName(myClientId),
       text,
       timestamp: Date.now(),
       color,
@@ -141,12 +143,14 @@ function broadcastRoomUpdate(roomId: string) {
     {
       clientId: room.playerA,
       ready: room.playerAReady,
+      name: getClientName(room.playerA),
     },
   ]
   if (room.playerB) {
     players.push({
       clientId: room.playerB,
       ready: room.playerBReady,
+      name: getClientName(room.playerB),
     })
   }
 
@@ -239,6 +243,9 @@ export function createApp() {
             send: sendToClient,
             broadcastLobby: broadcastLobbyUpdate,
           })
+        } else if (action === "setName") {
+          const name = data.name as string
+          result = handleSetName({ clientId: myClientId, name })
         }
         // Room actions
         else if (action && data.roomId) {

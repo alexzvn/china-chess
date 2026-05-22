@@ -5,6 +5,7 @@ import type { ChatMessage } from "./ChatPanel.vue"
 export interface RoomPlayer {
   clientId: string
   ready: boolean
+  name: string
 }
 
 const props = defineProps<{
@@ -32,9 +33,9 @@ const emit = defineEmits<{
   rematch: []
 }>()
 
-function playerLabel(clientId: string): string {
-  if (clientId === props.myClientId) return "You"
-  return `Player ${clientId.slice(0, 5)}`
+function playerLabel(player: { clientId: string; name: string }): string {
+  if (player.clientId === props.myClientId) return "You"
+  return player.name || `Player ${player.clientId.slice(0, 5)}`
 }
 
 function isHost(): boolean {
@@ -61,7 +62,7 @@ function hasOpponent(): boolean {
             class="flex items-center justify-between py-1"
           >
             <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
-              {{ playerLabel(p.clientId) }}
+              {{ playerLabel(p) }}
             </span>
             <div class="flex items-center gap-2">
               <span

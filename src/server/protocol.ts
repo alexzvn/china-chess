@@ -22,6 +22,7 @@ export type ServerMessage =
 export interface RoomPlayer {
   clientId: string
   ready: boolean
+  name: string
 }
 
 export interface LobbyRoom {
@@ -33,6 +34,7 @@ export interface LobbyRoom {
 
 export interface ChatMessage {
   sender: string
+  senderName: string
   text: string
   timestamp: number
   color: "red" | "black"

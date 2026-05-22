@@ -1,4 +1,5 @@
 import { rematch } from "../rooms"
+import { getClientName } from "../clientNames"
 import type { ServerMessage } from "../protocol"
 import type { RoomActionContext, ActionResult, Notification } from "./types"
 
@@ -13,9 +14,9 @@ export function handleRematch(ctx: RoomActionContext): ActionResult {
   ]
 
   if (result.bothAccepted) {
-    const players: { clientId: string; ready: boolean }[] = [
-      { clientId: result.room.playerA, ready: false },
-      ...(result.room.playerB ? [{ clientId: result.room.playerB, ready: false }] : []),
+    const players: { clientId: string; ready: boolean; name: string }[] = [
+      { clientId: result.room.playerA, ready: false, name: getClientName(result.room.playerA) },
+      ...(result.room.playerB ? [{ clientId: result.room.playerB, ready: false, name: getClientName(result.room.playerB) }] : []),
     ]
     notifications.push(
       { kind: "send" as const, clientId: result.room.playerA, message: { type: "roomUpdate" as const, players, roomStatus: "waiting" as const } },

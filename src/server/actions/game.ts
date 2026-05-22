@@ -1,4 +1,5 @@
 import { toggleReady, resign } from "../rooms"
+import { getClientName } from "../clientNames"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "../game/engine"
 import type { ServerMessage } from "../protocol"
 import type { RoomActionContext, ActionResult, Notification } from "./types"
@@ -6,11 +7,11 @@ import type { RoomActionContext, ActionResult, Notification } from "./types"
 export function handleToggleReady(ctx: RoomActionContext): ActionResult {
   toggleReady(ctx.roomId, ctx.clientId)
 
-  const players: { clientId: string; ready: boolean }[] = [
-    { clientId: ctx.room.playerA, ready: ctx.room.playerAReady },
+  const players: { clientId: string; ready: boolean; name: string }[] = [
+    { clientId: ctx.room.playerA, ready: ctx.room.playerAReady, name: getClientName(ctx.room.playerA) },
   ]
   if (ctx.room.playerB) {
-    players.push({ clientId: ctx.room.playerB, ready: ctx.room.playerBReady })
+    players.push({ clientId: ctx.room.playerB, ready: ctx.room.playerBReady, name: getClientName(ctx.room.playerB) })
   }
 
   if (ctx.room.status === "playing") {

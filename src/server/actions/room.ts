@@ -1,11 +1,12 @@
 import { createRoom, getRoom, getLobbyRooms, joinRoom, kickPlayer, leaveRoom } from "../rooms"
+import { getClientName } from "../clientNames"
 import type { RoomActionContext, NoRoomActionContext, ActionResult, Notification } from "./types"
 
 export function handleCreateRoom(ctx: NoRoomActionContext): ActionResult {
   const room = createRoom(ctx.clientId)
   const notifications: Notification[] = [
     { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomCreated" as const, roomId: room.roomId } },
-    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false }], roomStatus: "waiting" as const } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false, name: getClientName(room.playerA) }], roomStatus: "waiting" as const } },
     { kind: "broadcastLobby" as const },
   ]
   return { kind: "ok" as const, notifications }
@@ -34,11 +35,11 @@ export function handleJoinRoom(ctx: RoomActionContext): ActionResult {
   }
 
   const room = ctx.room
-  const players: { clientId: string; ready: boolean }[] = [
-    { clientId: room.playerA, ready: room.playerAReady },
+  const players: { clientId: string; ready: boolean; name: string }[] = [
+    { clientId: room.playerA, ready: room.playerAReady, name: getClientName(room.playerA) },
   ]
   if (room.playerB) {
-    players.push({ clientId: room.playerB, ready: room.playerBReady })
+    players.push({ clientId: room.playerB, ready: room.playerBReady, name: getClientName(room.playerB) })
   }
 
   const notifications: Notification[] = [
@@ -57,7 +58,7 @@ export function handleKickPlayer(ctx: RoomActionContext): ActionResult {
 
   const notifications: Notification[] = [
     { kind: "send" as const, clientId: kickedId, message: { type: "kicked" as const, reason: "You were kicked by the host" } },
-    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false }], roomStatus: "waiting" as const } },
+    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false, name: getClientName(room.playerA) }], roomStatus: "waiting" as const } },
     { kind: "broadcastLobby" as const },
   ]
   return { kind: "ok" as const, notifications }
@@ -79,7 +80,7 @@ export function handleLeaveRoom(ctx: RoomActionContext): ActionResult {
 
   // playerB left — room reset to waiting
   const notifications: Notification[] = [
-    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false }], roomStatus: "waiting" as const } },
+    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false, name: getClientName(room.playerA) }], roomStatus: "waiting" as const } },
     { kind: "broadcastLobby" as const },
   ]
   return { kind: "ok" as const, notifications }
