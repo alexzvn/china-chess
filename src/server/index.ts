@@ -112,6 +112,16 @@ function handleReclaimRoom(
       inCheck: false,
     })
 
+    // Send current time state on reconnect
+    if (room.timeA !== undefined && room.timeB !== undefined) {
+      sendToClient(myClientId, {
+        type: "timeUpdate",
+        timeA: room.timeA,
+        timeB: room.timeB,
+        timeAColor: room.colors!.a,
+      })
+    }
+
     sendToClient(opponentId, { type: "opponentReconnected" })
   }
 }

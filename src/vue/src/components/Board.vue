@@ -78,7 +78,7 @@ const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
 
 <template>
   <div class="board-wrapper inline-block">
-    <div class="board-surface relative overflow-hidden" :style="{ width: 'min(90vmin, 560px)', height: 'min(100vmin, 622px)' }">
+    <div class="board-surface relative" :style="{ width: 'min(90vmin, 560px)', height: 'min(100vmin, 622px)' }">
       <!-- SVG grid lines -->
       <svg
         class="absolute inset-0 w-full h-full pointer-events-none"
@@ -166,16 +166,25 @@ const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
 </template>
 
 <style scoped>
-.board-surface {
-  background: #f0d9a0;
+.board-wrapper {
   border: 3px solid #8B7355;
-  border-radius: 4px;
+  border-radius: 6px;
+  overflow: hidden;
   max-width: 95vw;
   max-height: 95vh;
+  /* force GPU layer for reliable border-radius clipping */
+  transform: translateZ(0);
+}
+
+.dark .board-wrapper {
+  border-color: #a08060;
+}
+
+.board-surface {
+  background: #f0d9a0;
 }
 
 .dark .board-surface {
   background: #5c3d2e;
-  border-color: #a08060;
 }
 </style>

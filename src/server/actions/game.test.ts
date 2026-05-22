@@ -87,6 +87,87 @@ describe("handleMove — extended rules integration", () => {
     })
   })
 
+  describe("time controls", () => {
+    it("deducts elapsed time from mover, opponent unchanged", () => {
+      const board = emptyBoard()
+      board[9]![4] = "r帥"
+      board[0]![3] = "b將"
+      board[6]![0] = "r兵"
+
+      const gameState: GameState = { board, turn: "red", moveCount: 0 }
+
+      const now = Date.now()
+      // Simulate red spending 15 seconds thinking
+      const room = makeRoom({
+        gameState,
+        timeA: 600,
+        timeB: 600,
+        lastTimeUpdate: now - 15000,
+      })
+      const { rooms } = require("../rooms") as { rooms: Map<string, Room> }
+      rooms.set(room.roomId, room)
+
+      // Red (playerA) moves pawn forward
+      const ctx = makeContext(room, playerA, { rank: 6, file: 0 }, { rank: 5, file: 0 })
+      const result: ActionResult = handleMove(ctx)
+
+      expect(result.kind).toBe("ok")
+      if (result.kind !== "ok") return
+
+      // Find the timeUpdate notification
+      const timeNotification = result.notifications.find(
+        (n) => n.kind === "send" && (n.message as { type: string }).type === "timeUpdate"
+      )
+      expect(timeNotification).toBeDefined()
+      if (!timeNotification || timeNotification.kind !== "send") return
+
+      const timeMsg = timeNotification.message as { timeA: number; timeB: number; timeAColor: string }
+      // Player A (red) spent 15s, loses 15s from clock
+      expect(timeMsg.timeA).toBe(600 - 15)
+      // Player B (black, opponent) unchanged
+      expect(timeMsg.timeB).toBe(600)
+    })
+
+    it("leaves opponent time unchanged when playerB moves", () => {
+      const board = emptyBoard()
+      board[9]![4] = "r帥"
+      board[0]![3] = "b將"
+      board[3]![0] = "b卒"
+
+      // Red just moved, now black's turn
+      const gameState: GameState = { board, turn: "black", moveCount: 1 }
+
+      const now = Date.now()
+      const room = makeRoom({
+        gameState,
+        timeA: 595,  // playerA (red) lost time from previous turn
+        timeB: 600,
+        lastTimeUpdate: now - 5000,  // black spent 5s thinking
+      })
+      const { rooms } = require("../rooms") as { rooms: Map<string, Room> }
+      rooms.set(room.roomId, room)
+
+      // Black (playerB) moves pawn forward
+      const ctx = makeContext(room, playerB, { rank: 3, file: 0 }, { rank: 4, file: 0 })
+      const result: ActionResult = handleMove(ctx)
+
+      expect(result.kind).toBe("ok")
+      if (result.kind !== "ok") return
+
+      const timeNotification = result.notifications.find(
+        (n) => n.kind === "send" && (n.message as { type: string }).type === "timeUpdate"
+      )
+      expect(timeNotification).toBeDefined()
+      if (!timeNotification || timeNotification.kind !== "send") return
+
+      const timeMsg = timeNotification.message as { timeA: number; timeB: number; timeAColor: string }
+      // Player B (black) spent 5s, loses 5s from clock
+      expect(timeMsg.timeB).toBe(600 - 5)
+      // Player A (red) unchanged
+      expect(timeMsg.timeA).toBe(595)
+    })
+  })
+
   describe("Perpetual chase", () => {
     it("ends game with draw when same position repeats 3 times", () => {
       const board = emptyBoard()

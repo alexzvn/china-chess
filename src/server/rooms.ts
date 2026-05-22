@@ -264,19 +264,25 @@ export function isSpectator(roomId: string, clientId: string): boolean {
 export function applyTimeControl(roomId: string, lastMover: "red" | "black"): Room {
   const room = rooms.get(roomId)
   if (!room) throw new Error("Room not found")
-  if (!room.timeA || !room.timeB) return room
+  if (room.timeA === undefined || room.timeB === undefined) return room
+  if (!room.colors) return room
 
-  // Add increment to the mover's time (they get bonus for making a move)
-  if (lastMover === "red") {
-    room.timeA = Math.min(room.timeA + timeControlSettings.increment, timeControlSettings.maxTime)
-    // Deduct increment from opponent's time
-    room.timeB = Math.max(0, room.timeB - timeControlSettings.increment)
+  const now = Date.now()
+  // Elapsed seconds since last time update (the mover was on the clock)
+  const elapsed = Math.floor(((now - (room.lastTimeUpdate ?? now)) / 1000))
+
+  // Map color to the correct player's time variable
+  const moverIsPlayerA = room.colors.a === lastMover
+
+  if (moverIsPlayerA) {
+    // Player A was thinking — deduct elapsed time
+    room.timeA = Math.max(0, room.timeA - elapsed)
   } else {
-    room.timeB = Math.min(room.timeB + timeControlSettings.increment, timeControlSettings.maxTime)
-    room.timeA = Math.max(0, room.timeA - timeControlSettings.increment)
+    // Player B was thinking — deduct elapsed time
+    room.timeB = Math.max(0, room.timeB - elapsed)
   }
   
-  room.lastTimeUpdate = Date.now()
+  room.lastTimeUpdate = now
   return room
 }
 
