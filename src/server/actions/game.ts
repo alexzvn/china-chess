@@ -1,4 +1,4 @@
-import { toggleReady, resign } from "../rooms"
+import { toggleReady, resign, applyTimeControl, getTimeUpdate, isTimeOut, timeControlSettings } from "../rooms"
 import { getClientName } from "../clientNames"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "../game/engine"
 import type { ServerMessage } from "../protocol"
@@ -15,11 +15,18 @@ export function handleToggleReady(ctx: RoomActionContext): ActionResult {
   }
 
   if (ctx.room.status === "playing") {
+    // Get initial times
+    const timeA = ctx.room.timeA ?? timeControlSettings.initial
+    const timeB = ctx.room.timeB ?? timeControlSettings.initial
+    
     const notifications: Notification[] = [
       { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "roomUpdate" as const, players, roomStatus: "waiting" as const } },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "roomUpdate" as const, players, roomStatus: "waiting" as const } },
       { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "gameStart" as const, yourColor: ctx.room.colors!.a, roomId: ctx.roomId, opponentId: ctx.room.playerB! } },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "gameStart" as const, yourColor: ctx.room.colors!.b, roomId: ctx.roomId, opponentId: ctx.room.playerA } },
+      // Send initial time to both players
+      { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "timeUpdate" as const, timeA, timeB } },
+      { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "timeUpdate" as const, timeA, timeB } },
       { kind: "broadcastLobby" as const },
     ]
     return { kind: "ok" as const, notifications }
@@ -56,23 +63,48 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
 
   ctx.room.gameState = result
 
+  // Apply time control: opponent loses time after each move
+  const moverColor = ctx.room.playerA === ctx.clientId ? ctx.room.colors!.a : ctx.room.colors!.b
+  const opponentColor = moverColor === "red" ? "black" : "red"
+  applyTimeControl(ctx.roomId, opponentColor)
+
+  // Check for timeout
+  const timeOut = isTimeOut(ctx.roomId, opponentColor)
+
   const inCheck = isInCheck(result.board, result.turn)
   const notifications: Notification[] = [
     { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "boardUpdate" as const, board: result.board, turn: result.turn, moveCount: result.moveCount, lastMove: { from: ctx.from, to: ctx.to }, inCheck } },
     { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "boardUpdate" as const, board: result.board, turn: result.turn, moveCount: result.moveCount, lastMove: { from: ctx.from, to: ctx.to }, inCheck } },
   ]
 
+  // Send time update to both players and spectators
+  const timeUpdate = getTimeUpdate(ctx.roomId)
+  if (timeUpdate) {
+    const timeMsg: ServerMessage = { type: "timeUpdate", timeA: timeUpdate.timeA, timeB: timeUpdate.timeB }
+    notifications.push(
+      { kind: "send" as const, clientId: ctx.room.playerA, message: timeMsg },
+      { kind: "send" as const, clientId: ctx.room.playerB!, message: timeMsg },
+      ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: timeMsg })),
+    )
+  }
+
+  // Check for win conditions
   const winner = isCheckmate(result.board, result.turn)
     ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
     : isStalemate(result.board, result.turn)
       ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
-      : null
+      : timeOut
+        ? { result: "timeout" as const, winnerColor: moverColor as "red" | "black" }
+        : null
 
   if (winner) {
     ctx.room.status = "finished"
     const expiresAt = Date.now() + 30000
     const wc = winner.winnerColor as "red" | "black"
-    const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason: `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`, expiresAt }
+    const reason = winner.result === "timeout" 
+      ? `${wc === "red" ? "Red" : "Black"} wins on time`
+      : `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`
+    const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason, expiresAt }
     notifications.push(
       { kind: "send" as const, clientId: ctx.room.playerA, message: endMsg },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: endMsg },

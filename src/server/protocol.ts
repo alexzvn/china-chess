@@ -9,7 +9,8 @@ export type ServerMessage =
   | { type: "lobbyUpdate"; rooms: LobbyRoom[] }
   | { type: "gameStart"; yourColor: "red" | "black"; roomId: string; opponentId: string }
   | { type: "boardUpdate"; board: Board; turn: "red" | "black"; moveCount: number; lastMove?: { from: Position; to: Position }; inCheck: boolean }
-  | { type: "gameEnd"; result: "checkmate" | "stalemate" | "resign" | "draw"; winnerColor: "red" | "black" | null; reason: string; expiresAt: number }
+  | { type: "timeUpdate"; timeA: number; timeB: number }
+  | { type: "gameEnd"; result: "checkmate" | "stalemate" | "resign" | "draw" | "timeout"; winnerColor: "red" | "black" | null; reason: string; expiresAt: number }
   | { type: "error"; message: string }
   | { type: "kicked"; reason: string }
   | { type: "chat"; message: ChatMessage }

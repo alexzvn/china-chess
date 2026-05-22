@@ -33,6 +33,9 @@ const countdownExpiresAt = shallowRef<number | null>(null)
 const countdownRemaining = shallowRef(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
+const timeA = shallowRef(0)
+const timeB = shallowRef(0)
+
 const { playSound } = useSound()
 
 const mode = computed<"pre-game" | "in-game" | "game-over">(() => {
@@ -80,6 +83,12 @@ const { clientId, status, send } = useWebSocket((data) => {
     } else {
       playSound("move")
     }
+  }
+
+  if (data.type === "timeUpdate") {
+    const msg = data as { timeA: number; timeB: number }
+    timeA.value = msg.timeA
+    timeB.value = msg.timeB
   }
 
   if (data.type === "gameEnd") {
@@ -307,6 +316,8 @@ function leaveSpectate() {
           :chat-disabled="false"
           :is-spectator="isSpectator"
           :countdown-remaining="countdownRemaining"
+          :time-a="timeA"
+          :time-b="timeB"
           @toggle-ready="toggleReady"
           @send-chat="sendChat"
           @resign="resign"

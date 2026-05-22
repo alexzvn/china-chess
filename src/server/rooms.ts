@@ -2,6 +2,13 @@ import { nanoid } from "nanoid"
 import type { GameState } from "./game/engine"
 import { createInitialBoard } from "./game/board"
 
+// Time control settings (can be made configurable later)
+export const timeControlSettings = {
+  initial: 600, // 10 minutes in seconds
+  increment: 10, // 10 seconds per move
+  maxTime: 1800, // 30 minutes max
+}
+
 export interface Room {
   roomId: string
   createdAt: string
@@ -15,6 +22,9 @@ export interface Room {
   rematchAcceptedA: boolean
   rematchAcceptedB: boolean
   spectators: string[]
+  timeA?: number // seconds remaining for playerA
+  timeB?: number // seconds remaining for playerB
+  lastTimeUpdate?: number // timestamp of last time update
 }
 
 const rooms = new Map<string, Room>()
@@ -102,6 +112,11 @@ export function startGame(roomId: string): GameStartResult {
     turn: "red",
     moveCount: 0,
   }
+  
+  // Initialize time controls
+  room.timeA = timeControlSettings.initial
+  room.timeB = timeControlSettings.initial
+  room.lastTimeUpdate = Date.now()
 
   return {
     room,
@@ -243,4 +258,73 @@ export function isSpectator(roomId: string, clientId: string): boolean {
   const room = rooms.get(roomId)
   if (!room) return false
   return room.spectators.includes(clientId)
+}
+
+// Time control functions
+export function applyTimeControl(roomId: string, lastMover: "red" | "black"): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  if (!room.timeA || !room.timeB) return room
+
+  // Add increment to the mover's time (they get bonus for making a move)
+  if (lastMover === "red") {
+    room.timeA = Math.min(room.timeA + timeControlSettings.increment, timeControlSettings.maxTime)
+    // Deduct increment from opponent's time
+    room.timeB = Math.max(0, room.timeB - timeControlSettings.increment)
+  } else {
+    room.timeB = Math.min(room.timeB + timeControlSettings.increment, timeControlSettings.maxTime)
+    room.timeA = Math.max(0, room.timeA - timeControlSettings.increment)
+  }
+  
+  room.lastTimeUpdate = Date.now()
+  return room
+}
+
+export function getPlayerTime(roomId: string, clientId: string): number | undefined {
+  const room = rooms.get(roomId)
+  if (!room) return undefined
+  
+  if (room.playerA === clientId) return room.timeA
+  if (room.playerB === clientId) return room.timeB
+  return undefined
+}
+
+export function deductTime(roomId: string, clientId: string, seconds: number): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  
+  if (room.playerA === clientId && room.timeA !== undefined) {
+    room.timeA = Math.max(0, room.timeA - seconds)
+  } else if (room.playerB === clientId && room.timeB !== undefined) {
+    room.timeB = Math.max(0, room.timeB - seconds)
+  }
+  
+  room.lastTimeUpdate = Date.now()
+  return room
+}
+
+export function initializeTimeControl(roomId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  
+  room.timeA = timeControlSettings.initial
+  room.timeB = timeControlSettings.initial
+  room.lastTimeUpdate = Date.now()
+  
+  return room
+}
+
+export function getTimeUpdate(roomId: string): { timeA: number; timeB: number } | undefined {
+  const room = rooms.get(roomId)
+  if (!room || room.timeA === undefined || room.timeB === undefined) return undefined
+  
+  return { timeA: room.timeA, timeB: room.timeB }
+}
+
+export function isTimeOut(roomId: string, color: "red" | "black"): boolean {
+  const room = rooms.get(roomId)
+  if (!room) return false
+  
+  if (color === "red") return (room.timeA ?? 0) <= 0
+  return (room.timeB ?? 0) <= 0
 }
