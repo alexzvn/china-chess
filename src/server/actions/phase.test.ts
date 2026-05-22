@@ -19,6 +19,7 @@ describe("handleRejoinRoom", () => {
       colors: gameState ? { a: "red", b: "black" } : undefined,
       rematchAcceptedA: false,
       rematchAcceptedB: false,
+      spectators: [],
     }
   }
 

@@ -10,6 +10,7 @@ interface RoomInfo {
   playerA: string
   playerB: string | null
   status: string
+  spectatorCount?: number
 }
 
 const rooms = ref<RoomInfo[]>([])
@@ -45,7 +46,11 @@ function createRoom() {
 }
 
 function joinRoom(roomId: string) {
-  router.push(`/room/${roomId}`)
+  router.push({ path: `/room/${roomId}`, query: { cid: clientId.value ?? undefined } })
+}
+
+function watchRoom(roomId: string) {
+  router.push({ path: `/room/${roomId}`, query: { spectate: "1", cid: clientId.value ?? undefined } })
 }
 
 function saveName() {
@@ -131,7 +136,9 @@ function openNameInput() {
           :key="room.roomId"
           :room-id="room.roomId"
           :player-count="room.playerB ? 2 : 1"
+          :spectator-count="room.spectatorCount || 0"
           @join="joinRoom"
+          @watch="watchRoom"
         />
       </div>
     </div>

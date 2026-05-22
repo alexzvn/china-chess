@@ -2,7 +2,7 @@ import { Elysia } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { readFileSync, existsSync } from "fs"
 import { nanoid } from "nanoid"
-import { getRoom, getLobbyRooms } from "./rooms"
+import { getRoom, getLobbyRooms, getSpectators, rooms as allRooms } from "./rooms"
 import { handleSetName, getClientName } from "./clientNames"
 import type { Room } from "./rooms"
 import type { ServerWebSocket } from "bun"
@@ -22,13 +22,15 @@ function sendToClient(clientId: string, payload: Record<string, unknown>) {
 }
 
 function broadcastLobbyUpdate() {
-  const rooms = getLobbyRooms().map((r) => ({
+  const lobbyList = [...getLobbyRooms(), ...Array.from(allRooms.values()).filter(r => r.status === "playing")]
+  const roomsData = lobbyList.map((r) => ({
     roomId: r.roomId,
     playerA: r.playerA,
     playerB: r.playerB,
     status: r.status,
+    spectatorCount: r.spectators?.length || 0,
   }))
-  const payload = JSON.stringify({ type: "lobbyUpdate", rooms })
+  const payload = JSON.stringify({ type: "lobbyUpdate", rooms: roomsData })
 
   // Publish to lobby topic via Elysia's server
   const server = app?.server
@@ -132,7 +134,13 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
     },
   }
   sendToClient(room.playerA, chatMsg)
-  sendToClient(room.playerB!, chatMsg)
+  if (room.playerB) {
+    sendToClient(room.playerB, chatMsg)
+  }
+  // Also send to spectators
+  room.spectators?.forEach(spectatorId => {
+    sendToClient(spectatorId, chatMsg)
+  })
 }
 
 function broadcastRoomUpdate(roomId: string) {
@@ -154,16 +162,22 @@ function broadcastRoomUpdate(roomId: string) {
     })
   }
 
+  const spectators = room.spectators || []
   const payload = {
     type: "roomUpdate",
     players,
     roomStatus: room.status,
+    spectators,
   }
 
   sendToClient(room.playerA, payload)
   if (room.playerB) {
     sendToClient(room.playerB, payload)
   }
+  // Also notify spectators
+  spectators.forEach(spectatorId => {
+    sendToClient(spectatorId, payload)
+  })
 }
 
 export function createApp() {

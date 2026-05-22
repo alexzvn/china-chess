@@ -18,6 +18,7 @@ const props = defineProps<{
   gameResult?: string
   chatMessages: ChatMessage[]
   chatDisabled: boolean
+  isSpectator?: boolean
   countdownRemaining?: number
 }>()
 
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   backToLobby: []
   kick: []
   rematch: []
+  leaveSpectate: []
 }>()
 
 function playerLabel(player: { clientId: string; name: string }): string {
@@ -86,8 +88,11 @@ function hasOpponent(): boolean {
           </div>
         </div>
         <div class="px-3 pb-3">
+          <div v-if="isSpectator" class="text-xs text-center text-purple-600 dark:text-purple-400 py-2">
+            You're spectating this room
+          </div>
           <button
-            v-if="players.some((p) => p.clientId === myClientId)"
+            v-else-if="players.some((p) => p.clientId === myClientId)"
             @click="emit('toggleReady')"
             class="w-full px-4 py-2 text-sm font-medium rounded-lg transition-all"
             :class="
@@ -115,36 +120,65 @@ function hasOpponent(): boolean {
           Game Info
         </div>
         <div class="p-3 space-y-2">
-          <!-- My info -->
-          <div
-            class="px-3 py-2 rounded-lg border-2 transition-all"
-            :class="{
-              'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950 shadow-sm': turn === myColor,
-              'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60': turn !== myColor,
-              'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950': inCheckColor === myColor,
-            }"
-          >
-            <div class="flex items-center gap-2">
-              <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-red-600' : 'bg-gray-900'" />
-              <span class="text-sm font-medium text-gray-800 dark:text-gray-200">You ({{ myColor === 'red' ? 'Red' : 'Black' }})</span>
-              <span v-if="inCheckColor === myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+          <!-- Spectator view -->
+          <template v-if="isSpectator">
+            <div class="px-3 py-2 rounded-lg border-2 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Spectating</span>
+              </div>
             </div>
-          </div>
-          <!-- Opponent info -->
-          <div
-            class="px-3 py-2 rounded-lg border-2 transition-all"
-            :class="{
-              'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950 shadow-sm': turn !== myColor,
-              'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60': turn === myColor,
-              'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950': inCheckColor !== myColor && inCheckColor !== null,
-            }"
-          >
-            <div class="flex items-center gap-2">
-              <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-gray-900' : 'bg-red-600'" />
-              <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Opponent ({{ myColor === 'red' ? 'Black' : 'Red' }})</span>
-              <span v-if="inCheckColor !== null && inCheckColor !== myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+            <div
+              class="px-3 py-2 rounded-lg border-2 transition-all"
+              :class="turn === 'red' ? 'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60'"
+            >
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full shrink-0 bg-red-600" />
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Red</span>
+                <span v-if="inCheckColor === 'red'" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+              </div>
             </div>
-          </div>
+            <div
+              class="px-3 py-2 rounded-lg border-2 transition-all"
+              :class="turn === 'black' ? 'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60'"
+            >
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full shrink-0 bg-gray-900" />
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Black</span>
+                <span v-if="inCheckColor === 'black'" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+              </div>
+            </div>
+          </template>
+          <!-- Player view -->
+          <template v-else>
+            <div
+              class="px-3 py-2 rounded-lg border-2 transition-all"
+              :class="{
+                'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950 shadow-sm': turn === myColor,
+                'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60': turn !== myColor,
+                'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950': inCheckColor === myColor,
+              }"
+            >
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-red-600' : 'bg-gray-900'" />
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">You ({{ myColor === 'red' ? 'Red' : 'Black' }})</span>
+                <span v-if="inCheckColor === myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+              </div>
+            </div>
+            <div
+              class="px-3 py-2 rounded-lg border-2 transition-all"
+              :class="{
+                'border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-950 shadow-sm': turn !== myColor,
+                'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60': turn === myColor,
+                'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950': inCheckColor !== myColor && inCheckColor !== null,
+              }"
+            >
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-gray-900' : 'bg-red-600'" />
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Opponent ({{ myColor === 'red' ? 'Black' : 'Red' }})</span>
+                <span v-if="inCheckColor !== null && inCheckColor !== myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -164,8 +198,8 @@ function hasOpponent(): boolean {
         </div>
       </div>
 
-      <!-- In-game action buttons -->
-      <div v-if="mode === 'in-game'" class="flex gap-2" style="width: 240px;">
+      <!-- In-game action buttons (hide for spectators) -->
+      <div v-if="mode === 'in-game' && !isSpectator" class="flex gap-2" style="width: 240px;">
         <button @click="emit('resign')" class="flex-1 text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors">
           Resign
         </button>
@@ -175,10 +209,17 @@ function hasOpponent(): boolean {
       </div>
     </template>
 
+    <!-- Spectator: leave button -->
+    <div v-if="isSpectator" class="flex gap-2" style="width: 240px;">
+      <button @click="emit('leaveSpectate')" class="flex-1 text-xs px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors">
+        Leave Spectate
+      </button>
+    </div>
+
     <!-- Chat -->
     <ChatPanel
       :messages="chatMessages"
-      :disabled="chatDisabled"
+      :disabled="false"
       @send="(t) => emit('sendChat', t)"
     />
   </div>

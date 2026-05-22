@@ -14,9 +14,12 @@ export interface Room {
   colors?: { a: "red" | "black"; b: "red" | "black" }
   rematchAcceptedA: boolean
   rematchAcceptedB: boolean
+  spectators: string[]
 }
 
 const rooms = new Map<string, Room>()
+
+export { rooms } // For testing
 
 export function createRoom(clientId: string): Room {
   const room: Room = {
@@ -29,6 +32,7 @@ export function createRoom(clientId: string): Room {
     status: "waiting",
     rematchAcceptedA: false,
     rematchAcceptedB: false,
+    spectators: [],
   }
   rooms.set(room.roomId, room)
   return room
@@ -205,4 +209,38 @@ export function kickPlayer(roomId: string, kickerId: string): { room: Room; kick
   room.rematchAcceptedB = false
 
   return { room, kickedId }
+}
+
+// Spectator functions
+export function joinAsSpectator(roomId: string, clientId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  
+  // Don't add if already a player or already spectating
+  if (room.playerA === clientId || room.playerB === clientId) {
+    throw new Error("Client is already in this room as a player")
+  }
+  if (!room.spectators.includes(clientId)) {
+    room.spectators.push(clientId)
+  }
+  return room
+}
+
+export function leaveSpectate(roomId: string, clientId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  
+  room.spectators = room.spectators.filter(id => id !== clientId)
+  return room
+}
+
+export function getSpectators(roomId: string): string[] {
+  const room = rooms.get(roomId)
+  return room?.spectators ?? []
+}
+
+export function isSpectator(roomId: string, clientId: string): boolean {
+  const room = rooms.get(roomId)
+  if (!room) return false
+  return room.spectators.includes(clientId)
 }

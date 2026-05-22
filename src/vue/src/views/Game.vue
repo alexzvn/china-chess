@@ -23,6 +23,7 @@ const gameOver = shallowRef(false)
 const gameResult = shallowRef("")
 const myColor = shallowRef<"red" | "black" | null>(null)
 const myClientId = shallowRef<string | null>(null)
+const isSpectator = shallowRef(route.query.spectate === "1")
 const error = shallowRef<string | null>(null)
 const players = ref<RoomPlayer[]>([])
 const chatMessages = ref<ChatMessage[]>([])
@@ -170,7 +171,10 @@ function createInitialBoard(): BoardState {
 // Wait for both connected AND clientId to be set before sending room actions
 watch([status, clientId], ([s, cid]) => {
   if (s === "connected" && cid && roomId) {
-    if (originalClientId) {
+    if (isSpectator.value) {
+      // Joining as spectator
+      send({ action: "joinAsSpectator", roomId })
+    } else if (originalClientId) {
       // Came from Lobby after creating room — reclaim our original player slot
       send({ action: "reclaimRoom", roomId, originalClientId })
     } else {
@@ -181,7 +185,7 @@ watch([status, clientId], ([s, cid]) => {
 })
 
 function onCellClick(rank: number, file: number) {
-  if (gameOver.value || !gameStarted.value) return
+  if (gameOver.value || !gameStarted.value || isSpectator.value) return
   const move = handleCellClick(rank, file)
   if (move) {
     send({ action: "move", roomId, from: move.from, to: move.to })
@@ -244,6 +248,11 @@ function declineDraw() {
   send({ type: "drawDecline", roomId })
   pendingDrawOffer.value = false
 }
+
+function leaveSpectate() {
+  send({ action: "leaveSpectate", roomId })
+  router.push("/")
+}
 </script>
 
 <template>
@@ -261,6 +270,7 @@ function declineDraw() {
       <div class="flex items-center justify-between mb-3 px-2">
         <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">
           Room: <span class="font-mono text-sm">{{ roomId }}</span>
+          <span v-if="isSpectator" class="ml-2 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">Spectating</span>
         </h1>
         <ThemeDropdown />
       </div>
@@ -278,7 +288,7 @@ function declineDraw() {
             :is-capture-target="isCaptureTarget"
             :in-check-color="inCheckColor"
             :last-move="lastMove"
-            :class="{ 'pointer-events-none': !gameStarted || gameOver }"
+            :class="{ 'pointer-events-none': !gameStarted || gameOver || isSpectator }"
             @cell-click="onCellClick"
           />
         </div>
@@ -294,7 +304,8 @@ function declineDraw() {
           :in-check-color="inCheckColor"
           :game-result="gameResult"
           :chat-messages="chatMessages"
-          :chat-disabled="gameOver"
+          :chat-disabled="false"
+          :is-spectator="isSpectator"
           :countdown-remaining="countdownRemaining"
           @toggle-ready="toggleReady"
           @send-chat="sendChat"
@@ -303,11 +314,12 @@ function declineDraw() {
           @back-to-lobby="backToLobby"
           @kick="kick"
           @rematch="rematch"
+          @leave-spectate="leaveSpectate"
         />
       </div>
 
-      <!-- Draw offer notification -->
-      <div v-if="pendingDrawOffer" class="fixed bottom-4 right-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 dark:border-yellow-800 rounded-lg px-4 py-2 flex items-center gap-3 shadow-lg z-50">
+      <!-- Draw offer notification (only for players, not spectators) -->
+      <div v-if="pendingDrawOffer && !isSpectator" class="fixed bottom-4 right-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 dark:border-yellow-800 rounded-lg px-4 py-2 flex items-center gap-3 shadow-lg z-50">
         <span class="text-sm text-yellow-800 dark:text-yellow-200">Opponent offers a draw</span>
         <button @click="acceptDraw" class="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 dark:hover:bg-green-800">Accept</button>
         <button @click="declineDraw" class="text-sm px-3 py-1 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-600">Decline</button>

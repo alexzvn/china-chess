@@ -4,7 +4,8 @@ import type { Board, Position, GameState } from "./game/engine"
 export type ServerMessage =
   | { type: "connected"; clientId: string }
   | { type: "roomCreated"; roomId: string }
-  | { type: "roomUpdate"; players: RoomPlayer[]; roomStatus: Room["status"] }
+  | { type: "roomUpdate"; players: RoomPlayer[]; roomStatus: Room["status"]; spectators?: string[] }
+  | { type: "spectatorUpdate"; spectators: string[] }
   | { type: "lobbyUpdate"; rooms: LobbyRoom[] }
   | { type: "gameStart"; yourColor: "red" | "black"; roomId: string; opponentId: string }
   | { type: "boardUpdate"; board: Board; turn: "red" | "black"; moveCount: number; lastMove?: { from: Position; to: Position }; inCheck: boolean }
