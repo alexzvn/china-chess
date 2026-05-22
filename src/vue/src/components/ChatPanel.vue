@@ -54,8 +54,17 @@ watch(
     </div>
     <div ref="listRef" class="flex-1 overflow-y-auto p-2 space-y-1">
       <div v-for="(msg, i) in messages" :key="i" class="text-sm">
-        <span class="font-medium" :class="msg.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'">
-          {{ msg.senderName || msg.sender.slice(0, 5) }} ({{ msg.color === "red" ? "Red" : "Black" }}):
+        <span
+          class="font-medium"
+          :class="{
+            'text-red-600 dark:text-red-400': msg.color === 'red',
+            'text-gray-800 dark:text-gray-200': msg.color === 'black',
+            'text-purple-600 dark:text-purple-400': msg.color === 'spectator',
+          }"
+        >
+          {{ msg.senderName || msg.sender.slice(0, 5) }}
+          <template v-if="msg.color === 'spectator'"> (Spectator):</template>
+          <template v-else>({{ msg.color === 'red' ? 'Red' : 'Black' }}):</template>
         </span>
         <span class="text-gray-700 dark:text-gray-300 ml-1">{{ msg.text }}</span>
       </div>

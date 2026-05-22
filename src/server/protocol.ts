@@ -39,5 +39,5 @@ export interface ChatMessage {
   senderName: string
   text: string
   timestamp: number
-  color: "red" | "black"
+  color: "red" | "black" | "spectator"
 }

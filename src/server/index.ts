@@ -122,7 +122,15 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
   if (!room) return
   const text = data.text as string
   const isPlayerA = room.playerA === myClientId
-  const color = isPlayerA ? room.colors!.a : room.colors!.b
+  const isPlayerB = room.playerB === myClientId
+  const isSpectator = room.spectators?.includes(myClientId)
+  const color: "red" | "black" | "spectator" = isSpectator
+    ? "spectator"
+    : isPlayerA && room.colors
+      ? room.colors.a
+      : isPlayerB && room.colors
+        ? room.colors.b
+        : "red" // fallback for pre-game where colors aren't assigned yet
   const chatMsg = {
     type: "chat",
     message: {
