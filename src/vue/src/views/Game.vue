@@ -338,49 +338,52 @@ function confirmForfeit() {
 
       <!-- Board + Side Panel layout -->
       <div class="flex flex-col md:flex-row gap-4 items-start justify-center">
-        <!-- Board -->
-        <div class="flex flex-col items-center self-center md:self-start relative">
-          <Board
-            :board="board"
-            :flipped="myColor === 'black'"
-            :selected-pos="selectedPos"
-            :legal-moves="legalMoves"
-            :is-legal-target="isLegalTarget"
-            :is-capture-target="isCaptureTarget"
-            :in-check-color="inCheckColor"
-            :last-move="lastMove"
-            :class="{ 'pointer-events-none': !gameStarted || gameOver || isSpectator }"
-            @cell-click="onCellClick"
-          />
+        <!-- Board column -->
+        <div class="flex flex-col items-center self-center md:self-start">
+          <!-- Board with game-over overlay -->
+          <div class="relative">
+            <Board
+              :board="board"
+              :flipped="myColor === 'black'"
+              :selected-pos="selectedPos"
+              :legal-moves="legalMoves"
+              :is-legal-target="isLegalTarget"
+              :is-capture-target="isCaptureTarget"
+              :in-check-color="inCheckColor"
+              :last-move="lastMove"
+              :class="{ 'pointer-events-none': !gameStarted || gameOver || isSpectator }"
+              @cell-click="onCellClick"
+            />
 
-          <!-- Game-over overlay on board -->
-          <div
-            v-if="gameOver"
-            class="absolute inset-0 bg-black/60 dark:bg-black/70 flex flex-col items-center justify-center rounded-lg z-50 backdrop-blur-sm"
-          >
-            <p class="text-white text-lg md:text-xl font-bold px-4 text-center">{{ gameResult }}</p>
-            <div v-if="countdownRemaining > 0" class="mt-2 text-gray-300 text-xs">
-              New game in <span class="font-mono font-bold">{{ String(Math.floor(countdownRemaining / 60)).padStart(2, '0') }}:{{ String(countdownRemaining % 60).padStart(2, '0') }}</span>
-            </div>
-            <div class="mt-4 flex gap-3">
-              <button @click="rematch" class="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                Rematch
-              </button>
-              <button @click="backToLobby" class="px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
-                Back to Lobby
-              </button>
+            <!-- Game-over overlay on board -->
+            <div
+              v-if="gameOver"
+              class="absolute inset-0 bg-black/60 dark:bg-black/70 flex flex-col items-center justify-center rounded-lg z-50 backdrop-blur-sm"
+            >
+              <p class="text-white text-lg md:text-xl font-bold px-4 text-center">{{ gameResult }}</p>
+              <div v-if="countdownRemaining > 0" class="mt-2 text-gray-300 text-xs">
+                New game in <span class="font-mono font-bold">{{ String(Math.floor(countdownRemaining / 60)).padStart(2, '0') }}:{{ String(countdownRemaining % 60).padStart(2, '0') }}</span>
+              </div>
+              <div class="mt-4 flex gap-3">
+                <button @click="rematch" class="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                  Rematch
+                </button>
+                <button @click="backToLobby" class="px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                  Back to Lobby
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Forfeit button during active game -->
-        <div v-if="gameStarted && !gameOver && !isSpectator" class="mt-3">
-          <button
-            @click="showForfeitConfirm = true"
-            class="text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
-          >
-            Back to Lobby
-          </button>
+          <!-- Back to Lobby — at bottom of board column during active game -->
+          <div v-if="gameStarted && !gameOver && !isSpectator" class="mt-3">
+            <button
+              @click="showForfeitConfirm = true"
+              class="text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+            >
+              Back to Lobby
+            </button>
+          </div>
         </div>
 
         <!-- Side Panel -->
