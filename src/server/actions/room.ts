@@ -67,21 +67,41 @@ export function handleKickPlayer(ctx: RoomActionContext): ActionResult {
 }
 
 export function handleLeaveRoom(ctx: RoomActionContext): ActionResult {
-  const room = leaveRoom(ctx.roomId, ctx.clientId)
+  const room = ctx.room
+  const isHost = room.playerA === ctx.clientId
+  const isPlaying = room.status === "playing"
+  const opponentId = isHost ? room.playerB : room.playerA
 
-  if (ctx.clientId === room.playerA) {
+  // If leaving during active game, it's a forfeit — send gameEnd first
+  let forfeitNotifications: Notification[] = []
+  if (isPlaying && opponentId && room.colors) {
+    const forfeiterColor = isHost ? room.colors.a : room.colors.b
+    const winnerColor = forfeiterColor === "red" ? "black" : "red"
+    const expiresAt = Date.now() + 30000
+    const endMsg = { type: "gameEnd" as const, result: "resign" as const, winnerColor, reason: `${winnerColor === "red" ? "Red" : "Black"} wins by forfeit`, expiresAt }
+    forfeitNotifications = [
+      { kind: "send" as const, clientId: room.playerA, message: endMsg },
+      ...(room.playerB ? [{ kind: "send" as const, clientId: room.playerB, message: endMsg }] : []),
+    ]
+  }
+
+  leaveRoom(ctx.roomId, ctx.clientId)
+
+  if (isHost) {
     // Host left — room was deleted, notify opponent
-    if (room.playerB) {
+    if (opponentId) {
       const notifications: Notification[] = [
-        { kind: "send" as const, clientId: room.playerB, message: { type: "error" as const, message: "Host left the room" } },
+        ...forfeitNotifications,
+        { kind: "send" as const, clientId: opponentId, message: { type: "error" as const, message: "Host left the room" } },
       ]
       return { kind: "ok" as const, notifications }
     }
-    return { kind: "ok" as const, notifications: [] }
+    return { kind: "ok" as const, notifications: forfeitNotifications }
   }
 
   // playerB left — room reset to waiting
   const notifications: Notification[] = [
+    ...forfeitNotifications,
     { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players: [{ clientId: room.playerA, ready: false, name: getClientName(room.playerA) }], roomStatus: "waiting" as const } },
     { kind: "broadcastLobby" as const },
   ]
