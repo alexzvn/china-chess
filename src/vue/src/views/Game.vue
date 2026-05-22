@@ -22,6 +22,10 @@ const gameStarted = shallowRef(false)
 const gameOver = shallowRef(false)
 const gameResult = shallowRef("")
 const myColor = shallowRef<"red" | "black" | null>(null)
+
+// Compute per-player times: myTime for the current player, opponentTime for the other
+const myTime = computed(() => myColor.value === "red" ? redTime.value : blackTime.value)
+const opponentTime = computed(() => myColor.value === "red" ? blackTime.value : redTime.value)
 const myClientId = shallowRef<string | null>(null)
 const isSpectator = shallowRef(route.query.spectate === "1")
 const error = shallowRef<string | null>(null)
@@ -35,13 +39,20 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const timeA = shallowRef(0)
 const timeB = shallowRef(0)
+const timeAColor = shallowRef<"red" | "black">("red")
+
+const redTime = computed(() => timeAColor.value === "red" ? timeA.value : timeB.value)
+const blackTime = computed(() => timeAColor.value === "black" ? timeA.value : timeB.value)
 let timeCountdownInterval: ReturnType<typeof setInterval> | null = null
 
 function startTimeCountdown() {
   if (timeCountdownInterval) clearInterval(timeCountdownInterval)
   timeCountdownInterval = setInterval(() => {
     if (gameOver.value || !gameStarted.value) return
-    if (turn.value === "red") {
+    // Decrement the active player's time
+    const isRedTurn = turn.value === "red"
+    const activeTimeA = timeAColor.value === (isRedTurn ? "red" : "black")
+    if (activeTimeA) {
       if (timeA.value > 0) timeA.value = Math.max(0, timeA.value - 1)
     } else {
       if (timeB.value > 0) timeB.value = Math.max(0, timeB.value - 1)
@@ -83,6 +94,7 @@ const { clientId, status, send } = useWebSocket((data) => {
       stopTimeCountdown()
       timeA.value = 0
       timeB.value = 0
+      timeAColor.value = "red"
     } else if (!gameStarted.value && !gameOver.value) {
       setBoard(createInitialBoard())
     }
@@ -109,9 +121,10 @@ const { clientId, status, send } = useWebSocket((data) => {
   }
 
   if (data.type === "timeUpdate") {
-    const msg = data as { timeA: number; timeB: number }
+    const msg = data as { timeA: number; timeB: number; timeAColor: "red" | "black" }
     timeA.value = msg.timeA
     timeB.value = msg.timeB
+    timeAColor.value = msg.timeAColor
     startTimeCountdown()
   }
 
@@ -168,6 +181,7 @@ const { clientId, status, send } = useWebSocket((data) => {
     stopTimeCountdown()
     timeA.value = 0
     timeB.value = 0
+    timeAColor.value = "red"
   }
 
   if (data.type === "rematchState") {
@@ -239,6 +253,7 @@ function backToLobby() {
   stopTimeCountdown()
   timeA.value = 0
   timeB.value = 0
+  timeAColor.value = "red"
   router.push("/")
 }
 
@@ -347,8 +362,8 @@ function leaveSpectate() {
           :chat-disabled="false"
           :is-spectator="isSpectator"
           :countdown-remaining="countdownRemaining"
-          :time-a="timeA"
-          :time-b="timeB"
+          :red-time="redTime"
+          :black-time="blackTime"
           @toggle-ready="toggleReady"
           @send-chat="sendChat"
           @resign="resign"

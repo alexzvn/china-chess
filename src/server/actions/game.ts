@@ -25,8 +25,8 @@ export function handleToggleReady(ctx: RoomActionContext): ActionResult {
       { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "gameStart" as const, yourColor: ctx.room.colors!.a, roomId: ctx.roomId, opponentId: ctx.room.playerB! } },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "gameStart" as const, yourColor: ctx.room.colors!.b, roomId: ctx.roomId, opponentId: ctx.room.playerA } },
       // Send initial time to both players
-      { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "timeUpdate" as const, timeA, timeB } },
-      { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "timeUpdate" as const, timeA, timeB } },
+      { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "timeUpdate" as const, timeA, timeB, timeAColor: ctx.room.colors!.a } },
+      { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "timeUpdate" as const, timeA, timeB, timeAColor: ctx.room.colors!.a } },
       { kind: "broadcastLobby" as const },
     ]
     return { kind: "ok" as const, notifications }
@@ -63,12 +63,12 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
 
   ctx.room.gameState = result
 
-  // Apply time control: opponent loses time after each move
+  // Apply time control: mover gets increment, opponent's time ticks down
   const moverColor = ctx.room.playerA === ctx.clientId ? ctx.room.colors!.a : ctx.room.colors!.b
-  const opponentColor = moverColor === "red" ? "black" : "red"
-  applyTimeControl(ctx.roomId, opponentColor)
+  applyTimeControl(ctx.roomId, moverColor)
 
-  // Check for timeout
+  // Check for timeout (opponent timed out)
+  const opponentColor = moverColor === "red" ? "black" : "red"
   const timeOut = isTimeOut(ctx.roomId, opponentColor)
 
   const inCheck = isInCheck(result.board, result.turn)
@@ -80,7 +80,7 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
   // Send time update to both players and spectators
   const timeUpdate = getTimeUpdate(ctx.roomId)
   if (timeUpdate) {
-    const timeMsg: ServerMessage = { type: "timeUpdate", timeA: timeUpdate.timeA, timeB: timeUpdate.timeB }
+    const timeMsg: ServerMessage = { type: "timeUpdate", timeA: timeUpdate.timeA, timeB: timeUpdate.timeB, timeAColor: ctx.room.colors!.a }
     notifications.push(
       { kind: "send" as const, clientId: ctx.room.playerA, message: timeMsg },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: timeMsg },

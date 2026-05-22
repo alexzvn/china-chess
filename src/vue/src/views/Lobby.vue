@@ -46,11 +46,11 @@ function createRoom() {
 }
 
 function joinRoom(roomId: string) {
-  router.push({ path: `/room/${roomId}`, query: { cid: clientId.value ?? undefined } })
+  router.push(`/room/${roomId}`)
 }
 
 function watchRoom(roomId: string) {
-  router.push({ path: `/room/${roomId}`, query: { spectate: "1", cid: clientId.value ?? undefined } })
+  router.push({ path: `/room/${roomId}`, query: { spectate: "1" } })
 }
 
 function saveName() {
