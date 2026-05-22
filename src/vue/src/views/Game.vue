@@ -35,6 +35,26 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const timeA = shallowRef(0)
 const timeB = shallowRef(0)
+let timeCountdownInterval: ReturnType<typeof setInterval> | null = null
+
+function startTimeCountdown() {
+  if (timeCountdownInterval) clearInterval(timeCountdownInterval)
+  timeCountdownInterval = setInterval(() => {
+    if (gameOver.value || !gameStarted.value) return
+    if (turn.value === "red") {
+      if (timeA.value > 0) timeA.value = Math.max(0, timeA.value - 1)
+    } else {
+      if (timeB.value > 0) timeB.value = Math.max(0, timeB.value - 1)
+    }
+  }, 1000)
+}
+
+function stopTimeCountdown() {
+  if (timeCountdownInterval) {
+    clearInterval(timeCountdownInterval)
+    timeCountdownInterval = null
+  }
+}
 
 const { playSound } = useSound()
 
@@ -60,6 +80,9 @@ const { clientId, status, send } = useWebSocket((data) => {
       setBoard(createInitialBoard())
       clearLastMove()
       clearCountdown()
+      stopTimeCountdown()
+      timeA.value = 0
+      timeB.value = 0
     } else if (!gameStarted.value && !gameOver.value) {
       setBoard(createInitialBoard())
     }
@@ -89,11 +112,13 @@ const { clientId, status, send } = useWebSocket((data) => {
     const msg = data as { timeA: number; timeB: number }
     timeA.value = msg.timeA
     timeB.value = msg.timeB
+    startTimeCountdown()
   }
 
   if (data.type === "gameEnd") {
     const msg = data as { result: string; winnerColor: string | null; reason: string; expiresAt?: number }
     gameOver.value = true
+    stopTimeCountdown()
     gameResult.value = msg.reason
     if (msg.expiresAt) {
       countdownExpiresAt.value = msg.expiresAt
@@ -140,6 +165,9 @@ const { clientId, status, send } = useWebSocket((data) => {
     gameStarted.value = false
     gameOver.value = false
     clearLastMove()
+    stopTimeCountdown()
+    timeA.value = 0
+    timeB.value = 0
   }
 
   if (data.type === "rematchState") {
@@ -208,6 +236,9 @@ function toggleReady() {
 function backToLobby() {
   send({ action: "leaveRoom" })
   clearCountdown()
+  stopTimeCountdown()
+  timeA.value = 0
+  timeB.value = 0
   router.push("/")
 }
 

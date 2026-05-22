@@ -144,6 +144,7 @@ function hasOpponent(): boolean {
                 <div class="w-3 h-3 rounded-full shrink-0 bg-red-600" />
                 <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Red</span>
                 <span v-if="inCheckColor === 'red'" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+                <span v-if="timeA !== undefined" class="ml-2 text-xs font-mono" :class="timeA < 30 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-400'">{{ formatTime(timeA) }}</span>
               </div>
             </div>
             <div
@@ -154,6 +155,7 @@ function hasOpponent(): boolean {
                 <div class="w-3 h-3 rounded-full shrink-0 bg-gray-900" />
                 <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Black</span>
                 <span v-if="inCheckColor === 'black'" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
+                <span v-if="timeB !== undefined" class="ml-2 text-xs font-mono" :class="timeB < 30 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-400'">{{ formatTime(timeB) }}</span>
               </div>
             </div>
           </template>
@@ -171,7 +173,7 @@ function hasOpponent(): boolean {
                 <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-red-600' : 'bg-gray-900'" />
                 <span class="text-sm font-medium text-gray-800 dark:text-gray-200">You ({{ myColor === 'red' ? 'Red' : 'Black' }})</span>
                 <span v-if="inCheckColor === myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
-                <span v-if="timeA !== undefined" class="ml-2 text-xs font-mono text-gray-600 dark:text-gray-400">{{ formatTime(timeA) }}</span>
+                <span v-if="timeA !== undefined" class="ml-2 text-xs font-mono" :class="timeA < 30 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-400'">{{ formatTime(timeA) }}</span>
               </div>
             </div>
             <div
@@ -186,7 +188,7 @@ function hasOpponent(): boolean {
                 <div class="w-3 h-3 rounded-full shrink-0" :class="myColor === 'red' ? 'bg-gray-900' : 'bg-red-600'" />
                 <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Opponent ({{ myColor === 'red' ? 'Black' : 'Red' }})</span>
                 <span v-if="inCheckColor !== null && inCheckColor !== myColor" class="ml-auto text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">CHECK!</span>
-                <span v-if="timeB !== undefined" class="ml-2 text-xs font-mono text-gray-600 dark:text-gray-400">{{ formatTime(timeB) }}</span>
+                <span v-if="timeB !== undefined" class="ml-2 text-xs font-mono" :class="timeB < 30 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-400'">{{ formatTime(timeB) }}</span>
               </div>
             </div>
           </template>
