@@ -379,7 +379,7 @@ function confirmForfeit() {
             @click="showForfeitConfirm = true"
             class="text-xs px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
           >
-            Forfeit &amp; Leave
+            Back to Lobby
           </button>
         </div>
 
@@ -421,7 +421,7 @@ function confirmForfeit() {
           <p class="text-gray-800 dark:text-gray-200 font-medium mb-4">Are you sure? You'll forfeit the game.</p>
           <div class="flex gap-2 justify-end">
             <button @click="showForfeitConfirm = false" class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
-            <button @click="confirmForfeit" class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors">Forfeit &amp; Leave</button>
+            <button @click="confirmForfeit" class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors">Forfeit</button>
           </div>
         </div>
       </div>
