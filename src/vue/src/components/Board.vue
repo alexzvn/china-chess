@@ -103,8 +103,8 @@ const sy = (rank: number) => M + (props.flipped ? 9 - rank : rank) * S
         <circle v-for="dot in DOT_POSITIONS" :key="'dot-' + dot.rank + '-' + dot.file" :cx="sx(dot.file)" :cy="sy(dot.rank)" r="5" fill="#8B7355" class="dark:fill-gray-500" />
       </svg>
 
-      <!-- River text -->
-      <div class="absolute left-0 right-0 flex items-center justify-center pointer-events-none z-10 select-none" :style="{ top: M + 4.5 * S + 'px', height: S + 'px', marginTop: -S / 2 + 'px', left: M + 'px', right: M + 'px' }">
+      <!-- River text — positioned using SVG viewBox proportions (50/900 margins, 500/1000 center) -->
+      <div class="absolute flex items-center justify-center pointer-events-none z-10 select-none" :style="{ top: '50%', height: '10%', marginTop: '-5%', left: 50 / 900 * 100 + '%', right: 50 / 900 * 100 + '%' }">
         <span class="text-3xl font-bold text-amber-800 dark:text-amber-400 tracking-[1em] opacity-40">楚河 漢界</span>
       </div>
 
