@@ -62,6 +62,10 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
     return { kind: "error", message: "Illegal move" }
   }
 
+  // Track position history for draw detection
+  const prevHistory = ctx.room.gameState.positionHistory || []
+  result.positionHistory = [...prevHistory, getPositionKey(result.board)]
+
   ctx.room.gameState = result
 
   // Apply time control: mover gets increment, opponent's time ticks down
@@ -89,16 +93,30 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
     )
   }
 
-  // Check for win conditions
-  const winner = isCheckmate(result.board, result.turn)
-    ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
-    : isStalemate(result.board, result.turn)
-      ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
-      : timeOut
-        ? { result: "timeout" as const, winnerColor: moverColor as "red" | "black" }
-        : null
+  // Check for draw conditions
+  const isDraw = isPerpetualChase(result.positionHistory) || isInsufficientMaterial(result.board)
 
-  if (winner) {
+  // Check for win conditions
+  const winner = isDraw
+    ? null
+    : isCheckmate(result.board, result.turn)
+      ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+      : isStalemate(result.board, result.turn)
+        ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+        : timeOut
+          ? { result: "timeout" as const, winnerColor: moverColor as "red" | "black" }
+          : null
+
+  if (isDraw) {
+    ctx.room.status = "finished"
+    const expiresAt = Date.now() + 30000
+    const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt }
+    notifications.push(
+      { kind: "send" as const, clientId: ctx.room.playerA, message: endMsg },
+      { kind: "send" as const, clientId: ctx.room.playerB!, message: endMsg },
+      { kind: "broadcastLobby" as const },
+    )
+  } else if (winner) {
     ctx.room.status = "finished"
     const expiresAt = Date.now() + 30000
     const wc = winner.winnerColor as "red" | "black"
