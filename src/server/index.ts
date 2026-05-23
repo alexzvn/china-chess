@@ -10,7 +10,6 @@ import type { Position } from "./game/engine"
 import { allActions } from "./actions/index.js"
 import type { ActionResult } from "./actions/types.js"
 import type { ServerMessage } from "./protocol.js"
-import { BotEngine } from "./game/bot"
 import { makeMove, isCheckmate, isStalemate } from "./game/engine"
 import { applyTimeControl, getTimeUpdate, isTimeOut } from "./rooms"
 import { isPerpetualChase, isInsufficientMaterial, getPositionKey } from "./game/rules"
@@ -174,8 +173,8 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
 }
 
 // Bot move scheduling
-const botEngines = new Map<string, BotEngine>()
 const botTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+let botMoveId = 0
 
 function scheduleBotMove(roomId: string) {
   // Clear any existing timeout
@@ -193,13 +192,6 @@ function scheduleBotMove(roomId: string) {
   // Only schedule if it's the bot's turn
   if (room.gameState.turn !== botColor) return
 
-  // Get or create bot engine
-  let engine = botEngines.get(roomId)
-  if (!engine) {
-    engine = new BotEngine(room.botDifficulty ?? "medium")
-    botEngines.set(roomId, engine)
-  }
-
   // Random delay between 500-1500ms to feel natural
   const delay = 500 + Math.random() * 1000
 
@@ -210,74 +202,99 @@ function scheduleBotMove(roomId: string) {
     if (!currentRoom || !currentRoom.gameState || currentRoom.status !== "playing") return
     if (currentRoom.gameState.turn !== botColor) return
 
-    const botMove = engine!.findBestMove(currentRoom.gameState.board, botColor)
-    if (!botMove) return
+    // Find best move in a worker thread so the event loop stays responsive
+    const moveId = ++botMoveId
+    const worker = new Worker(new URL("./game/bot.worker.ts", import.meta.url).href)
 
-    // Apply the bot move
-    const result = makeMove(currentRoom.gameState, botMove.from, botMove.to)
-    if (!result) return
+    worker.postMessage({
+      id: moveId,
+      roomId,
+      board: currentRoom.gameState.board,
+      color: botColor,
+      difficulty: currentRoom.botDifficulty ?? "medium",
+    })
 
-    currentRoom.gameState = result
+    worker.onmessage = (e: MessageEvent) => {
+      const data = e.data
+      worker.terminate()
 
-    // Track move history
-    if (!currentRoom.moveHistory) currentRoom.moveHistory = []
-    currentRoom.moveHistory.push({ from: botMove.from, to: botMove.to, captured: result.captured ?? null })
+      // Verify this response is still for the right room and turn
+      const verifyRoom = getRoom(roomId)
+      if (!verifyRoom || !verifyRoom.gameState || verifyRoom.status !== "playing") return
+      if (verifyRoom.gameState.turn !== botColor) return
 
-    // Apply time control
-    applyTimeControl(roomId, botColor)
+      if (!data.from || !data.to) return
 
-    // Send board update
-    const inCheck = false // We'll skip check detection for bot for now
-    const boardMsg: ServerMessage = {
-      type: "boardUpdate",
-      board: result.board,
-      turn: result.turn,
-      moveCount: result.moveCount,
-      lastMove: { from: botMove.from, to: botMove.to },
-      inCheck,
-    }
+      // Apply the bot move
+      const result = makeMove(verifyRoom.gameState, data.from, data.to)
+      if (!result) return
 
-    sendToClient(currentRoom.playerA, boardMsg)
-    // Don't send to bot (it's not a real client)
+      verifyRoom.gameState = result
 
-    // Send time update
-    const timeUpdate = getTimeUpdate(roomId)
-    if (timeUpdate) {
-      const timeMsg: ServerMessage = {
-        type: "timeUpdate",
-        timeA: timeUpdate.timeA,
-        timeB: timeUpdate.timeB,
-        timeAColor: currentRoom.colors!.a,
+      // Track move history
+      if (!verifyRoom.moveHistory) verifyRoom.moveHistory = []
+      verifyRoom.moveHistory.push({ from: data.from, to: data.to, captured: result.captured ?? null })
+
+      // Apply time control
+      applyTimeControl(roomId, botColor)
+
+      // Send board update
+      const inCheck = false // We'll skip check detection for bot for now
+      const boardMsg: ServerMessage = {
+        type: "boardUpdate",
+        board: result.board,
+        turn: result.turn,
+        moveCount: result.moveCount,
+        lastMove: { from: data.from, to: data.to },
+        inCheck,
       }
-      sendToClient(currentRoom.playerA, timeMsg)
+
+      sendToClient(verifyRoom.playerA, boardMsg)
+
+      // Send time update
+      const timeUpdate = getTimeUpdate(roomId)
+      if (timeUpdate) {
+        const timeMsg: ServerMessage = {
+          type: "timeUpdate",
+          timeA: timeUpdate.timeA,
+          timeB: timeUpdate.timeB,
+          timeAColor: verifyRoom.colors!.a,
+        }
+        sendToClient(verifyRoom.playerA, timeMsg)
+      }
+
+      // Check for game end
+      const history = result.positionHistory ?? []
+      const isDraw = isPerpetualChase(history) || isInsufficientMaterial(result.board)
+      const winner = isDraw
+        ? null
+        : isCheckmate(result.board, result.turn)
+          ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+          : isStalemate(result.board, result.turn)
+            ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+            : null
+
+      if (isDraw) {
+        verifyRoom.status = "finished"
+        const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
+        sendToClient(verifyRoom.playerA, endMsg)
+      } else if (winner) {
+        verifyRoom.status = "finished"
+        const wc = winner.winnerColor as "red" | "black"
+        const reason = `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`
+        const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason, expiresAt: Date.now() + 30000 }
+        sendToClient(verifyRoom.playerA, endMsg)
+      }
+
+      // Schedule next bot move if game continues (but only if it's still bot's turn)
+      if (verifyRoom.status === "playing" && verifyRoom.gameState.turn === botColor) {
+        scheduleBotMove(roomId)
+      }
     }
 
-    // Check for game end
-    const history = result.positionHistory ?? []
-    const isDraw = isPerpetualChase(history) || isInsufficientMaterial(result.board)
-    const winner = isDraw
-      ? null
-      : isCheckmate(result.board, result.turn)
-        ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
-        : isStalemate(result.board, result.turn)
-          ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
-          : null
-
-    if (isDraw) {
-      currentRoom.status = "finished"
-      const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
-      sendToClient(currentRoom.playerA, endMsg)
-    } else if (winner) {
-      currentRoom.status = "finished"
-      const wc = winner.winnerColor as "red" | "black"
-      const reason = `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`
-      const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason, expiresAt: Date.now() + 30000 }
-      sendToClient(currentRoom.playerA, endMsg)
-    }
-
-    // Schedule next bot move if game continues (but only if it's still bot's turn)
-    if (currentRoom.status === "playing" && currentRoom.gameState.turn === botColor) {
-      scheduleBotMove(roomId)
+    worker.onerror = (err) => {
+      worker.terminate()
+      console.error(JSON.stringify({ event: "bot-worker-error", roomId, error: err.message }))
     }
   }, delay)
 

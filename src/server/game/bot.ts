@@ -1,4 +1,4 @@
-import type { Board, Position, GameState } from "./engine"
+import type { Board, Position } from "./engine"
 import { getLegalMoves } from "./engine"
 
 // Piece values for evaluation
@@ -15,10 +15,22 @@ const PIECE_VALUES: Record<string, number> = {
   卒: 100,
 }
 
+// Capture-value bonus for move ordering — captures of high-value pieces first
+const CAPTURE_VALUES: Record<string, number> = {
+  車: 900,
+  馬: 400,
+  炮: 450,
+  砲: 450,
+  士: 200,
+  象: 200,
+  帥: 10000,
+  將: 10000,
+  兵: 100,
+  卒: 100,
+  default: 0,
+}
+
 // Position bonus tables (simplified — higher values for better positions)
-// These are 10×9 arrays indexed by [rank][file]
-// Red perspective: rank 0 = top (enemy side), rank 9 = bottom (home)
-// For simplicity, we use basic heuristics
 function positionBonus(piece: string, rank: number, file: number): number {
   const type = piece.slice(1)
   const isRed = piece.startsWith("r")
@@ -79,17 +91,20 @@ export function evaluate(board: Board, color: "red" | "black"): number {
 export type Difficulty = "beginner" | "easy" | "medium" | "hard" | "expert"
 
 interface DifficultyConfig {
-  depth: number
+  maxDepth: number
   randomChance: number
 }
 
 const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
-  beginner: { depth: 1, randomChance: 0.3 },
-  easy: { depth: 2, randomChance: 0.2 },
-  medium: { depth: 3, randomChance: 0.1 },
-  hard: { depth: 4, randomChance: 0 },
-  expert: { depth: 5, randomChance: 0 },
+  beginner: { maxDepth: 1, randomChance: 0.3 },
+  easy: { maxDepth: 2, randomChance: 0.2 },
+  medium: { maxDepth: 3, randomChance: 0.1 },
+  hard: { maxDepth: 4, randomChance: 0 },
+  expert: { maxDepth: 4, randomChance: 0 },
 }
+
+// Max search time per move in ms
+const MAX_SEARCH_TIME_MS = 2000
 
 function cloneBoard(board: Board): Board {
   return board.map((row) => [...row])
@@ -124,6 +139,21 @@ function applyMove(board: Board, from: Position, to: Position): Board {
   return newBoard
 }
 
+/** Order moves so captures (high-value captures first) come first for alpha-beta */
+function orderMoves(board: Board, moves: Array<{ from: Position; to: Position }>): Array<{ from: Position; to: Position }> {
+  return [...moves].sort((a, b) => {
+    const capturedA = board[a.to.rank]![a.to.file]
+    const capturedB = board[b.to.rank]![b.to.file]
+    const valA = capturedA ? (CAPTURE_VALUES[capturedA.slice(1)] ?? 0) : 0
+    const valB = capturedB ? (CAPTURE_VALUES[capturedB.slice(1)] ?? 0) : 0
+    return valB - valA // Highest value capture first
+  })
+}
+
+/**
+ * Minimax with alpha-beta pruning and move ordering.
+ * Stops searching when deadline is exceeded and returns a "timeout sentinel".
+ */
 function minimax(
   board: Board,
   depth: number,
@@ -131,24 +161,33 @@ function minimax(
   beta: number,
   maximizing: boolean,
   color: "red" | "black",
+  deadline: number,
 ): number {
+  if (Date.now() > deadline) {
+    return maximizing ? -Infinity : Infinity
+  }
+
   if (depth === 0) {
     return evaluate(board, color)
   }
 
   const currentColor = maximizing ? color : (color === "red" ? "black" : "red")
-  const moves = getAllMoves(board, currentColor)
+  const rawMoves = getAllMoves(board, currentColor)
 
-  if (moves.length === 0) {
+  if (rawMoves.length === 0) {
     // No moves = loss (checkmate or stalemate)
     return maximizing ? -99999 : 99999
   }
+
+  // Move ordering: captures first for effective alpha-beta pruning
+  const moves = orderMoves(board, rawMoves)
 
   if (maximizing) {
     let maxEval = -Infinity
     for (const move of moves) {
       const newBoard = applyMove(board, move.from, move.to)
-      const evalScore = minimax(newBoard, depth - 1, alpha, beta, false, color)
+      const evalScore = minimax(newBoard, depth - 1, alpha, beta, false, color, deadline)
+      if (evalScore === -Infinity) return -Infinity // timed out
       maxEval = Math.max(maxEval, evalScore)
       alpha = Math.max(alpha, evalScore)
       if (beta <= alpha) break // Beta cutoff
@@ -158,7 +197,8 @@ function minimax(
     let minEval = Infinity
     for (const move of moves) {
       const newBoard = applyMove(board, move.from, move.to)
-      const evalScore = minimax(newBoard, depth - 1, alpha, beta, true, color)
+      const evalScore = minimax(newBoard, depth - 1, alpha, beta, true, color, deadline)
+      if (evalScore === Infinity) return Infinity // timed out
       minEval = Math.min(minEval, evalScore)
       beta = Math.min(beta, evalScore)
       if (beta <= alpha) break // Alpha cutoff
@@ -188,25 +228,55 @@ export class BotEngine {
       return moves[randomIndex]!
     }
 
-    // Minimax search
+    const deadline = Date.now() + MAX_SEARCH_TIME_MS
+
+    // Iterative deepening + alpha-beta with move ordering
+    const orderedMoves = orderMoves(board, moves)
+    let bestMove = orderedMoves[0]!
     let bestScore = -Infinity
-    let bestMove = moves[0]!
 
-    for (const move of moves) {
-      const newBoard = applyMove(board, move.from, move.to)
-      const score = minimax(
-        newBoard,
-        this.config.depth - 1,
-        -Infinity,
-        Infinity,
-        false,
-        color,
-      )
+    // Start with depth 1 and go deeper until time runs out
+    for (let depth = 1; depth <= this.config.maxDepth; depth++) {
+      let currentBestScore = -Infinity
+      let currentBestMove = orderedMoves[0]!
+      let completed = true
 
-      if (score > bestScore) {
-        bestScore = score
-        bestMove = move
+      for (const move of orderedMoves) {
+        if (Date.now() > deadline) {
+          completed = false
+          break
+        }
+
+        const newBoard = applyMove(board, move.from, move.to)
+        const score = minimax(
+          newBoard,
+          depth - 1,
+          -Infinity,
+          Infinity,
+          false,
+          color,
+          deadline,
+        )
+
+        if (score === -Infinity || score === Infinity) {
+          // Timed out during this search
+          completed = false
+          break
+        }
+
+        if (score > currentBestScore) {
+          currentBestScore = score
+          currentBestMove = move
+        }
       }
+
+      if (completed) {
+        bestScore = currentBestScore
+        bestMove = currentBestMove
+      }
+
+      // If we ran out of time, use the last completed depth's result
+      if (!completed) break
     }
 
     return bestMove
