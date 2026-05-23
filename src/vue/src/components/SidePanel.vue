@@ -113,13 +113,6 @@ function hasOpponent(): boolean {
             You're spectating this room
           </div>
           <button
-            v-else-if="players.some((p) => p.clientId === myClientId) && !isHost()"
-            @click="emit('becomeSpectator')"
-            class="w-full mt-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-          >
-            Become Spectator
-          </button>
-          <button
             v-else-if="players.some((p) => p.clientId === myClientId)"
             @click="emit('toggleReady')"
             class="w-full px-4 py-2 text-sm font-medium rounded-lg transition-all"
@@ -136,6 +129,13 @@ function hasOpponent(): boolean {
             <template v-else>
               Ready
             </template>
+          </button>
+          <button
+            v-if="!isHost() && players.some((p) => p.clientId === myClientId)"
+            @click="emit('becomeSpectator')"
+            class="w-full mt-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+          >
+            Become Spectator
           </button>
         </div>
       </div>

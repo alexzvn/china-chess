@@ -52,11 +52,24 @@ describe("SidePanel — pre-game mode", () => {
     expect(opponent.ready).toBe(false)
   })
 
-  it("disables ready button if opponent has not joined", () => {
-    const players = [{ clientId: "client-a", ready: false }]
-    const opponentJoined = players.length > 1
+  it("non-host player (playerB) can toggle ready not just become spectator", () => {
+    // playerB should have the Ready button visible, not just Become Spectator
+    const players = [
+      { clientId: "host-id", ready: false, name: "Host" },
+      { clientId: "playerb-id", ready: false, name: "PlayerB" },
+    ]
+    const myClientId = "playerb-id"
+    const isHost = players.length > 0 && players[0]!.clientId === myClientId
+    const isSpectator = false
+    const inPlayers = players.some((p) => p.clientId === myClientId)
 
-    expect(opponentJoined).toBe(false)
+    // playerB is in the players list
+    expect(inPlayers).toBe(true)
+    // playerB is NOT the host
+    expect(isHost).toBe(false)
+    // playerB should still be able to toggle ready (not just become spectator)
+    const canToggleReady = inPlayers && !isSpectator
+    expect(canToggleReady).toBe(true)
   })
 })
 

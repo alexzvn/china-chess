@@ -233,6 +233,12 @@ function createInitialBoard(): BoardState {
 // Wait for both connected AND clientId to be set before sending room actions
 watch([status, clientId], ([s, cid]) => {
   if (s === "connected" && cid && roomId) {
+    // Send player's name from localStorage so it's associated with this clientId
+    const savedName = localStorage.getItem("playerName")
+    if (savedName) {
+      send({ action: "setName", name: savedName })
+    }
+
     if (isSpectator.value) {
       // Joining as spectator
       send({ action: "joinAsSpectator", roomId })
