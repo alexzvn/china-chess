@@ -1,6 +1,7 @@
-import { createRoom, getRoom, getLobbyRooms, joinRoom, kickPlayer, leaveRoom, joinAsSpectator, leaveSpectate, getSpectators, rooms as allRooms } from "../rooms"
+import { createRoom, getRoom, getLobbyRooms, joinRoom, kickPlayer, leaveRoom, joinAsSpectator, leaveSpectate, getSpectators, becomeSpectator, kickToSpectator, createBotRoom, rooms as allRooms } from "../rooms"
 import { getClientName } from "../clientNames"
 import type { RoomActionContext, NoRoomActionContext, ActionResult, Notification } from "./types"
+import type { Difficulty } from "../game/bot"
 
 export function handleCreateRoom(ctx: NoRoomActionContext): ActionResult {
   const room = createRoom(ctx.clientId)
@@ -19,6 +20,7 @@ export function handleJoinLobby(ctx: NoRoomActionContext): ActionResult {
     playerA: r.playerA,
     playerB: r.playerB,
     status: r.status,
+    hostName: getClientName(r.playerA) || r.playerA.slice(0, 5),
     spectatorCount: r.spectators?.length || 0,
   }))
   return {
@@ -158,6 +160,72 @@ export function handleLeaveSpectate(ctx: RoomActionContext): ActionResult {
   return { kind: "ok" as const, notifications }
 }
 
+export function handleBecomeSpectator(ctx: RoomActionContext): ActionResult {
+  try {
+    becomeSpectator(ctx.roomId, ctx.clientId)
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+
+  const room = ctx.room
+  const spectators = getSpectators(ctx.roomId)
+  const players = [
+    { clientId: room.playerA, ready: room.playerAReady, name: getClientName(room.playerA) },
+  ]
+  if (room.playerB) {
+    players.push({ clientId: room.playerB, ready: room.playerBReady, name: getClientName(room.playerB) })
+  }
+
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } },
+    ...(room.playerB ? [{ kind: "send" as const, clientId: room.playerB, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } }] : []),
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } },
+    { kind: "broadcastLobby" as const },
+  ]
+  return { kind: "ok" as const, notifications }
+}
+
+export function handleKickToSpectator(ctx: RoomActionContext): ActionResult {
+  try {
+    const { kickedId } = kickToSpectator(ctx.roomId, ctx.clientId)
+    
+    const room = ctx.room
+    const spectators = getSpectators(ctx.roomId)
+    const players = [
+      { clientId: room.playerA, ready: false, name: getClientName(room.playerA) },
+    ]
+
+    const notifications: Notification[] = [
+      { kind: "send" as const, clientId: kickedId, message: { type: "kicked" as const, reason: "You were moved to spectators by the host" } },
+      { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players, roomStatus: "waiting" as const, spectators } },
+      { kind: "broadcastLobby" as const },
+    ]
+    return { kind: "ok" as const, notifications }
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+}
+
+export function handleCreateBotRoom(ctx: NoRoomActionContext & { difficulty: string }): ActionResult {
+  const difficulty = (ctx.difficulty as Difficulty) || "medium"
+  const room = createBotRoom(ctx.clientId, difficulty)
+
+  const players = [
+    { clientId: room.playerA, ready: true, name: getClientName(room.playerA) },
+    { clientId: room.playerB!, ready: true, name: `Bot (${difficulty})` },
+  ]
+
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomCreated" as const, roomId: room.roomId } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players, roomStatus: room.status } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "gameStart" as const, yourColor: room.colors!.a, roomId: room.roomId, opponentId: room.botClientId! } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "boardUpdate" as const, board: room.gameState!.board, turn: room.gameState!.turn, moveCount: 0, inCheck: false } },
+    { kind: "broadcastLobby" as const },
+  ]
+
+  return { kind: "ok" as const, notifications }
+}
+
 export const roomActions = {
   createRoom: handleCreateRoom,
   joinLobby: handleJoinLobby,
@@ -166,4 +234,7 @@ export const roomActions = {
   leaveRoom: handleLeaveRoom,
   joinAsSpectator: handleJoinAsSpectator,
   leaveSpectate: handleLeaveSpectate,
+  becomeSpectator: handleBecomeSpectator,
+  kickToSpectator: handleKickToSpectator,
+  createBotRoom: handleCreateBotRoom as any,
 }

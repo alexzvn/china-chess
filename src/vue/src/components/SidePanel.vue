@@ -21,6 +21,7 @@ const props = defineProps<{
   countdownRemaining?: number
   redTime?: number
   blackTime?: number
+  pendingUndoRequest?: boolean
 }>()
 
 function formatTime(seconds: number): string {
@@ -41,6 +42,11 @@ const emit = defineEmits<{
   kick: []
   rematch: []
   leaveSpectate: []
+  requestUndo: []
+  acceptUndo: []
+  declineUndo: []
+  becomeSpectator: []
+  kickToSpectator: []
 }>()
 
 function playerLabel(player: { clientId: string; name: string }): string {
@@ -88,6 +94,13 @@ function hasOpponent(): boolean {
               >
                 Kick
               </button>
+              <button
+                v-if="isHost() && p.clientId !== myClientId"
+                @click="emit('kickToSpectator')"
+                class="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+              >
+                → Spec
+              </button>
             </div>
           </div>
           <!-- Placeholder if waiting for opponent -->
@@ -99,6 +112,13 @@ function hasOpponent(): boolean {
           <div v-if="isSpectator" class="text-xs text-center text-purple-600 dark:text-purple-400 py-2">
             You're spectating this room
           </div>
+          <button
+            v-else-if="players.some((p) => p.clientId === myClientId) && !isHost()"
+            @click="emit('becomeSpectator')"
+            class="w-full mt-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+          >
+            Become Spectator
+          </button>
           <button
             v-else-if="players.some((p) => p.clientId === myClientId)"
             @click="emit('toggleReady')"
@@ -204,6 +224,18 @@ function hasOpponent(): boolean {
         <button @click="emit('offerDraw')" class="flex-1 text-xs px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
           Draw
         </button>
+      </div>
+      <div v-if="mode === 'in-game' && !isSpectator" class="flex gap-2" style="width: 240px;">
+        <button @click="emit('requestUndo')" class="flex-1 text-xs px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
+          Request Undo
+        </button>
+      </div>
+
+      <!-- Pending undo request from opponent -->
+      <div v-if="pendingUndoRequest && !isSpectator" class="flex gap-2 items-center" style="width: 240px;">
+        <span class="text-xs text-yellow-800 dark:text-yellow-200 flex-1">Opponent requests undo</span>
+        <button @click="emit('acceptUndo')" class="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
+        <button @click="emit('declineUndo')" class="text-xs px-2 py-1 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-600">Decline</button>
       </div>
     </template>
 

@@ -97,12 +97,14 @@ describe("Game start flow", () => {
 
     expect(aData.yourColor).not.toBe(bData.yourColor)
 
-    // Game room should no longer appear in lobby
+    // Playing rooms still appear in lobby (for ongoing game display)
     a.messages.length = 0
     a.ws.send(JSON.stringify({ action: "joinLobby" }))
     const lobbyUpdate = await a.waitFor((m) => m.includes('"type":"lobbyUpdate"'))
     const lobby = JSON.parse(lobbyUpdate)
-    expect(lobby.rooms.find((r: { roomId: string }) => r.roomId === roomId)).toBeUndefined()
+    const found = lobby.rooms.find((r: { roomId: string }) => r.roomId === roomId)
+    expect(found).toBeDefined()
+    expect(found!.status).toBe("playing")
 
     a.ws.close()
     b.ws.close()

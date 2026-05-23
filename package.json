@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@vitest/ui": "^4.1.6",
+    "@vue/test-utils": "^2.4.10",
     "happy-dom": "^20.9.0",
     "vitest": "^4.1.6",
     "vue-tsc": "^3.3.1"

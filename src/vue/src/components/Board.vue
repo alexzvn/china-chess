@@ -55,8 +55,6 @@ const DOT_POSITIONS: { rank: number; file: number }[] = [
   { rank: 7, file: 1 }, { rank: 7, file: 7 },
   { rank: 6, file: 0 }, { rank: 6, file: 2 }, { rank: 6, file: 4 }, { rank: 6, file: 6 }, { rank: 6, file: 8 },
   { rank: 3, file: 0 }, { rank: 3, file: 2 }, { rank: 3, file: 4 }, { rank: 3, file: 6 }, { rank: 3, file: 8 },
-  { rank: 2, file: 0 }, { rank: 2, file: 4 }, { rank: 2, file: 8 },
-  { rank: 7, file: 0 }, { rank: 7, file: 4 }, { rank: 7, file: 8 },
 ]
 
 function isSelected(rank: number, file: number): boolean {

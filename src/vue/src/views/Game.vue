@@ -33,6 +33,7 @@ const players = ref<RoomPlayer[]>([])
 const chatMessages = ref<ChatMessage[]>([])
 const drawOffered = shallowRef(false)
 const pendingDrawOffer = shallowRef(false)
+const pendingUndoRequest = shallowRef(false)
 const showForfeitConfirm = shallowRef(false)
 const countdownExpiresAt = shallowRef<number | null>(null)
 const countdownRemaining = shallowRef(0)
@@ -93,6 +94,7 @@ const { clientId, status, send } = useWebSocket((data) => {
       clearLastMove()
       clearCountdown()
       stopTimeCountdown()
+      pendingUndoRequest.value = false
       timeA.value = 0
       timeB.value = 0
       timeAColor.value = "red"
@@ -167,6 +169,14 @@ const { clientId, status, send } = useWebSocket((data) => {
 
   if (data.type === "drawDeclined") {
     drawOffered.value = false
+  }
+
+  if (data.type === "undoRequested") {
+    pendingUndoRequest.value = true
+  }
+
+  if (data.type === "undoAccepted" || data.type === "undoDeclined") {
+    pendingUndoRequest.value = false
   }
 
   if (data.type === "error") {
@@ -305,6 +315,26 @@ function declineDraw() {
   pendingDrawOffer.value = false
 }
 
+function requestUndo() {
+  send({ action: "requestUndo", roomId })
+}
+
+function acceptUndo() {
+  send({ action: "acceptUndo", roomId })
+}
+
+function declineUndo() {
+  send({ action: "declineUndo", roomId })
+}
+
+function becomeSpectator() {
+  send({ action: "becomeSpectator", roomId })
+}
+
+function kickToSpectator() {
+  send({ action: "kickToSpectator", roomId })
+}
+
 function leaveSpectate() {
   send({ action: "leaveSpectate", roomId })
   router.push("/")
@@ -401,6 +431,7 @@ function confirmForfeit() {
           :countdown-remaining="countdownRemaining"
           :red-time="redTime"
           :black-time="blackTime"
+          :pending-undo-request="pendingUndoRequest"
           @toggle-ready="toggleReady"
           @send-chat="sendChat"
           @resign="resign"
@@ -409,6 +440,11 @@ function confirmForfeit() {
           @kick="kick"
           @rematch="rematch"
           @leave-spectate="leaveSpectate"
+          @request-undo="requestUndo"
+          @accept-undo="acceptUndo"
+          @decline-undo="declineUndo"
+          @become-spectator="becomeSpectator"
+          @kick-to-spectator="kickToSpectator"
         />
       </div>
 

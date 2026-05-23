@@ -3,6 +3,7 @@ const props = defineProps<{
   roomId: string
   playerCount: number
   spectatorCount?: number
+  hostName?: string
 }>()
 
 const emit = defineEmits<{
@@ -25,9 +26,14 @@ function onWatch(e: MouseEvent) {
     class="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 flex items-center justify-between hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
     @click="onJoin"
   >
-    <div>
-      <span class="font-mono text-sm text-gray-500 dark:text-gray-400">Room</span>
-      <span class="ml-2 font-mono font-bold text-gray-800 dark:text-gray-100">{{ roomId }}</span>
+    <div class="flex flex-col gap-0.5">
+      <div>
+        <span class="font-mono text-sm text-gray-500 dark:text-gray-400">Room</span>
+        <span class="ml-2 font-mono font-bold text-gray-800 dark:text-gray-100">{{ roomId }}</span>
+      </div>
+      <div class="text-xs text-gray-500 dark:text-gray-400">
+        Host: {{ hostName || roomId.slice(0, 5) }}
+      </div>
     </div>
     <div class="flex items-center gap-2">
       <div class="text-sm text-gray-500 dark:text-gray-400">

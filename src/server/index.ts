@@ -2,14 +2,18 @@ import { Elysia } from "elysia"
 import { staticPlugin } from "@elysiajs/static"
 import { readFileSync, existsSync } from "fs"
 import { nanoid } from "nanoid"
-import { getRoom, getLobbyRooms, getSpectators, rooms as allRooms } from "./rooms"
-import { handleSetName, getClientName } from "./clientNames"
+import { getRoom, getLobbyRooms, getSpectators, rooms as allRooms, isBotRoom, getBotClientId } from "./rooms"
+import { handleSetName, getClientName, clientNames } from "./clientNames"
 import type { Room } from "./rooms"
 import type { ServerWebSocket } from "bun"
 import type { Position } from "./game/engine"
 import { allActions } from "./actions/index.js"
 import type { ActionResult } from "./actions/types.js"
 import type { ServerMessage } from "./protocol.js"
+import { BotEngine } from "./game/bot"
+import { makeMove, isCheckmate, isStalemate } from "./game/engine"
+import { applyTimeControl, getTimeUpdate, isTimeOut } from "./rooms"
+import { isPerpetualChase, isInsufficientMaterial, getPositionKey } from "./game/rules"
 
 const clientIds = new WeakMap<object, string>()
 const clientConnections = new Map<string, object>()
@@ -28,6 +32,7 @@ function broadcastLobbyUpdate() {
     playerA: r.playerA,
     playerB: r.playerB,
     status: r.status,
+    hostName: getClientName(r.playerA) || r.playerA.slice(0, 5),
     spectatorCount: r.spectators?.length || 0,
   }))
   const payload = JSON.stringify({ type: "lobbyUpdate", rooms: roomsData })
@@ -83,6 +88,13 @@ function handleReclaimRoom(
     room.playerA = myClientId
   } else {
     room.playerB = myClientId
+  }
+
+  // Transfer player name from old clientId to new clientId
+  const playerName = getClientName(originalClientId)
+  if (playerName) {
+    clientNames.set(myClientId, playerName)
+    clientNames.delete(originalClientId)
   }
 
   // Map the new clientId to the WebSocket
@@ -159,6 +171,117 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
   room.spectators?.forEach(spectatorId => {
     sendToClient(spectatorId, chatMsg)
   })
+}
+
+// Bot move scheduling
+const botEngines = new Map<string, BotEngine>()
+const botTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+
+function scheduleBotMove(roomId: string) {
+  // Clear any existing timeout
+  const existing = botTimeouts.get(roomId)
+  if (existing) clearTimeout(existing)
+
+  const room = getRoom(roomId)
+  if (!room || !room.gameState || room.status !== "playing") return
+  if (!room.colors) return
+
+  const botColor = room.colors.b // Bot is always playerB
+  const botId = room.botClientId
+  if (!botId) return
+
+  // Only schedule if it's the bot's turn
+  if (room.gameState.turn !== botColor) return
+
+  // Get or create bot engine
+  let engine = botEngines.get(roomId)
+  if (!engine) {
+    engine = new BotEngine(room.botDifficulty ?? "medium")
+    botEngines.set(roomId, engine)
+  }
+
+  // Random delay between 500-1500ms to feel natural
+  const delay = 500 + Math.random() * 1000
+
+  const timeout = setTimeout(() => {
+    botTimeouts.delete(roomId)
+
+    const currentRoom = getRoom(roomId)
+    if (!currentRoom || !currentRoom.gameState || currentRoom.status !== "playing") return
+    if (currentRoom.gameState.turn !== botColor) return
+
+    const botMove = engine!.findBestMove(currentRoom.gameState.board, botColor)
+    if (!botMove) return
+
+    // Apply the bot move
+    const result = makeMove(currentRoom.gameState, botMove.from, botMove.to)
+    if (!result) return
+
+    currentRoom.gameState = result
+
+    // Track move history
+    if (!currentRoom.moveHistory) currentRoom.moveHistory = []
+    currentRoom.moveHistory.push({ from: botMove.from, to: botMove.to, captured: result.captured ?? null })
+
+    // Apply time control
+    applyTimeControl(roomId, botColor)
+
+    // Send board update
+    const inCheck = false // We'll skip check detection for bot for now
+    const boardMsg: ServerMessage = {
+      type: "boardUpdate",
+      board: result.board,
+      turn: result.turn,
+      moveCount: result.moveCount,
+      lastMove: { from: botMove.from, to: botMove.to },
+      inCheck,
+    }
+
+    sendToClient(currentRoom.playerA, boardMsg)
+    // Don't send to bot (it's not a real client)
+
+    // Send time update
+    const timeUpdate = getTimeUpdate(roomId)
+    if (timeUpdate) {
+      const timeMsg: ServerMessage = {
+        type: "timeUpdate",
+        timeA: timeUpdate.timeA,
+        timeB: timeUpdate.timeB,
+        timeAColor: currentRoom.colors!.a,
+      }
+      sendToClient(currentRoom.playerA, timeMsg)
+    }
+
+    // Check for game end
+    const history = result.positionHistory ?? []
+    const isDraw = isPerpetualChase(history) || isInsufficientMaterial(result.board)
+    const winner = isDraw
+      ? null
+      : isCheckmate(result.board, result.turn)
+        ? { result: "checkmate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+        : isStalemate(result.board, result.turn)
+          ? { result: "stalemate" as const, winnerColor: result.turn === "red" ? "black" : "red" as const }
+          : null
+
+    if (isDraw) {
+      currentRoom.status = "finished"
+      const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
+      sendToClient(currentRoom.playerA, endMsg)
+    } else if (winner) {
+      currentRoom.status = "finished"
+      const wc = winner.winnerColor as "red" | "black"
+      const reason = `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`
+      const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason, expiresAt: Date.now() + 30000 }
+      sendToClient(currentRoom.playerA, endMsg)
+    }
+
+    // Schedule next bot move if game continues (but only if it's still bot's turn)
+    if (currentRoom.status === "playing" && currentRoom.gameState.turn === botColor) {
+      scheduleBotMove(roomId)
+    }
+  }, delay)
+
+  botTimeouts.set(roomId, timeout)
 }
 
 function broadcastRoomUpdate(roomId: string) {
@@ -278,6 +401,15 @@ export function createApp() {
         } else if (action === "setName") {
           const name = data.name as string
           result = handleSetName({ clientId: myClientId, name })
+        } else if (action === "createBotRoom") {
+          result = allActions.createBotRoom({
+            clientId: myClientId,
+            room: null as any,
+            roomId: "",
+            send: sendToClient,
+            broadcastLobby: broadcastLobbyUpdate,
+            difficulty: data.difficulty as string,
+          } as any)
         }
         // Room actions
         else if (action && data.roomId) {
@@ -313,6 +445,15 @@ export function createApp() {
             if (n.kind === "send") sendToClient(n.clientId, n.message)
             else if (n.kind === "broadcastLobby") broadcastLobbyUpdate()
           })
+        }
+
+        // Bot scheduling: after a human move in a bot room, schedule bot response
+        if (action === "move" && data.roomId) {
+          const roomId = data.roomId as string
+          const room = getRoom(roomId)
+          if (room && isBotRoom(roomId) && room.gameState) {
+            scheduleBotMove(roomId)
+          }
         }
       },
       close(ws) {

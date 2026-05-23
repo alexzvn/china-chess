@@ -11,12 +11,15 @@ interface RoomInfo {
   playerB: string | null
   status: string
   spectatorCount?: number
+  hostName?: string
 }
 
 const rooms = ref<RoomInfo[]>([])
 const playerName = ref(localStorage.getItem("playerName") || "")
 const nameInput = ref(playerName.value)
 const showNameInput = ref(!playerName.value)
+const showBotModal = ref(false)
+const botDifficulty = ref<"beginner" | "easy" | "medium" | "hard" | "expert">("medium")
 const router = useRouter()
 
 const { clientId, status, send } = useWebSocket((data) => {
@@ -43,6 +46,15 @@ watch(status, (s) => {
 
 function createRoom() {
   send({ action: "createRoom" })
+}
+
+function playBot() {
+  showBotModal.value = true
+}
+
+function confirmBotGame() {
+  showBotModal.value = false
+  send({ action: "createBotRoom", difficulty: botDifficulty.value })
 }
 
 function joinRoom(roomId: string) {
@@ -83,6 +95,13 @@ function openNameInput() {
           class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           + Create Room
+        </button>
+        <button
+          @click="playBot"
+          :disabled="status !== 'connected'"
+          class="px-5 py-2.5 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          Play vs Bot
         </button>
       </div>
 
@@ -137,9 +156,28 @@ function openNameInput() {
           :room-id="room.roomId"
           :player-count="room.playerB ? 2 : 1"
           :spectator-count="room.spectatorCount || 0"
+          :host-name="room.hostName"
           @join="joinRoom"
           @watch="watchRoom"
         />
+      </div>
+    </div>
+
+    <!-- Bot difficulty modal -->
+    <div v-if="showBotModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+        <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Play vs Bot</h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Select difficulty:</p>
+        <div class="space-y-2">
+          <label v-for="d in ['beginner','easy','medium','hard','expert']" :key="d" class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" v-model="botDifficulty" :value="d" class="text-purple-600" />
+            <span class="text-sm capitalize text-gray-800 dark:text-gray-200">{{ d }}</span>
+          </label>
+        </div>
+        <div class="flex gap-2 justify-end mt-4">
+          <button @click="showBotModal = false" class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
+          <button @click="confirmBotGame" class="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors">Start Game</button>
+        </div>
       </div>
     </div>
   </div>

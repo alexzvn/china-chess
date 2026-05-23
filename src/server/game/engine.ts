@@ -180,6 +180,7 @@ export interface GameState {
   turn: "red" | "black"
   moveCount: number
   lastMove?: { from: Position; to: Position }
+  captured?: string | null
   positionHistory?: string[]
 }
 
@@ -345,6 +346,7 @@ export function makeMove(
 
   // Apply the move
   const newBoard = cloneBoard(state.board)
+  const captured = newBoard[to.rank]![to.file] ?? null
   newBoard[to.rank]![to.file] = newBoard[from.rank]![from.file] ?? null
   newBoard[from.rank]![from.file] = null
 
@@ -353,5 +355,6 @@ export function makeMove(
     turn: state.turn === "red" ? "black" : "red",
     moveCount: state.moveCount + 1,
     lastMove: { from, to },
+    captured,
   }
 }

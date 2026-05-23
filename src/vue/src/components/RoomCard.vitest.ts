@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { mount } from "@vue/test-utils"
+import RoomCard from "./RoomCard.vue"
 
 // RoomCard is a display component. Test the prop/emit contract.
 
@@ -32,5 +34,29 @@ describe("RoomCard data flow", () => {
     for (const id of ids) {
       expect(id).toMatch(/^[a-zA-Z0-9_-]{7}$|^[a-zA-Z0-9_-]+$/)
     }
+  })
+})
+
+describe("RoomCard with hostName and spectators", () => {
+  it("renders host name when provided", () => {
+    const wrapper = mount(RoomCard, {
+      props: { roomId: "room123", playerCount: 1, hostName: "Alice" },
+    })
+    expect(wrapper.text()).toContain("Host: Alice")
+  })
+
+  it("renders spectator count when spectators present", () => {
+    const wrapper = mount(RoomCard, {
+      props: { roomId: "room123", playerCount: 2, hostName: "Bob", spectatorCount: 3 },
+    })
+    expect(wrapper.text()).toContain("2 / 2 players")
+    expect(wrapper.text()).toContain("+ 3")
+  })
+
+  it("does not show spectator count when zero", () => {
+    const wrapper = mount(RoomCard, {
+      props: { roomId: "room123", playerCount: 1, hostName: "Bob", spectatorCount: 0 },
+    })
+    expect(wrapper.text()).not.toContain("+")
   })
 })

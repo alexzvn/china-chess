@@ -1,4 +1,4 @@
-import { toggleReady, resign, applyTimeControl, getTimeUpdate, isTimeOut, timeControlSettings } from "../rooms"
+import { toggleReady, resign, applyTimeControl, getTimeUpdate, isTimeOut, timeControlSettings, requestUndo, acceptUndo, declineUndo, deductTime } from "../rooms"
 import { getClientName } from "../clientNames"
 import { makeMove, isInCheck, isCheckmate, isStalemate } from "../game/engine"
 import { getPositionKey, isPerpetualChase, isInsufficientMaterial } from "../game/rules"
@@ -71,6 +71,10 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
   // Apply time control: mover gets increment, opponent's time ticks down
   const moverColor = ctx.room.playerA === ctx.clientId ? ctx.room.colors!.a : ctx.room.colors!.b
   applyTimeControl(ctx.roomId, moverColor)
+
+  // Record move in history for undo
+  if (!ctx.room.moveHistory) ctx.room.moveHistory = []
+  ctx.room.moveHistory.push({ from: ctx.from, to: ctx.to, captured: result.captured ?? null })
 
   // Check for timeout (opponent timed out)
   const opponentColor = moverColor === "red" ? "black" : "red"
@@ -182,6 +186,71 @@ export function handleDrawDecline(ctx: RoomActionContext): ActionResult {
   return { kind: "ok" as const, notifications }
 }
 
+// Undo actions
+
+export function handleRequestUndo(ctx: RoomActionContext): ActionResult {
+  try {
+    requestUndo(ctx.roomId, ctx.clientId)
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+
+  const opponentId = ctx.room.playerA === ctx.clientId ? ctx.room.playerB! : ctx.room.playerA
+  const undoRequest = ctx.room.undoRequest!
+  
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: opponentId, message: { type: "undoRequested" as const, from: ctx.clientId, expiresAt: undoRequest.expiresAt } },
+  ]
+  return { kind: "ok" as const, notifications }
+}
+
+export function handleAcceptUndo(ctx: RoomActionContext): ActionResult {
+  try {
+    const result = acceptUndo(ctx.roomId)
+    if (!result.undone) throw new Error("Failed to undo")
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+
+  const gs = ctx.room.gameState!
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "boardUpdate" as const, board: gs.board, turn: gs.turn, moveCount: gs.moveCount, lastMove: gs.lastMove, inCheck: false } },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "boardUpdate" as const, board: gs.board, turn: gs.turn, moveCount: gs.moveCount, lastMove: gs.lastMove, inCheck: false } },
+    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "undoAccepted" as const } },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "undoAccepted" as const } },
+  ]
+  return { kind: "ok" as const, notifications }
+}
+
+export function handleDeclineUndo(ctx: RoomActionContext): ActionResult {
+  try {
+    declineUndo(ctx.roomId)
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+
+  // Deduct response time from requester's clock
+  const undoFrom = ctx.room.undoRequest?.from
+  // Note: undoRequest was already cleared by declineUndo
+
+  const requesterId = ctx.room.playerA === ctx.clientId ? ctx.room.playerB! : ctx.room.playerA
+  const timeUpdate = getTimeUpdate(ctx.roomId)
+  
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "undoDeclined" as const } },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "undoDeclined" as const } },
+  ]
+  if (timeUpdate) {
+    const timeMsg: ServerMessage = { type: "timeUpdate", timeA: timeUpdate.timeA, timeB: timeUpdate.timeB, timeAColor: ctx.room.colors!.a }
+    notifications.push(
+      { kind: "send" as const, clientId: ctx.room.playerA, message: timeMsg },
+      { kind: "send" as const, clientId: ctx.room.playerB!, message: timeMsg },
+    )
+  }
+
+  return { kind: "ok" as const, notifications }
+}
+
 export const gameActions = {
   toggleReady: handleToggleReady,
   move: handleMove,
@@ -189,4 +258,7 @@ export const gameActions = {
   drawOffer: handleDrawOffer,
   drawAccept: handleDrawAccept,
   drawDecline: handleDrawDecline,
+  requestUndo: handleRequestUndo,
+  acceptUndo: handleAcceptUndo,
+  declineUndo: handleDeclineUndo,
 }

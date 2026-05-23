@@ -20,6 +20,9 @@ export type ServerMessage =
   | { type: "opponentReconnected" }
   | { type: "roomReclaimed"; role: "playerA" | "playerB"; roomId: string }
   | { type: "pong" }
+  | { type: "undoRequested"; from: string; expiresAt: number }
+  | { type: "undoAccepted" }
+  | { type: "undoDeclined" }
 
 export interface RoomPlayer {
   clientId: string
@@ -32,6 +35,8 @@ export interface LobbyRoom {
   playerA: string
   playerB: string | null
   status: Room["status"]
+  hostName: string
+  spectatorCount: number
 }
 
 export interface ChatMessage {
