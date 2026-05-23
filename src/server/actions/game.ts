@@ -81,9 +81,11 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
   const timeOut = isTimeOut(ctx.roomId, opponentColor)
 
   const inCheck = isInCheck(result.board, result.turn)
+  const boardMsg: ServerMessage = { type: "boardUpdate" as const, board: result.board, turn: result.turn, moveCount: result.moveCount, lastMove: { from: ctx.from, to: ctx.to }, inCheck }
   const notifications: Notification[] = [
-    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "boardUpdate" as const, board: result.board, turn: result.turn, moveCount: result.moveCount, lastMove: { from: ctx.from, to: ctx.to }, inCheck } },
-    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "boardUpdate" as const, board: result.board, turn: result.turn, moveCount: result.moveCount, lastMove: { from: ctx.from, to: ctx.to }, inCheck } },
+    { kind: "send" as const, clientId: ctx.room.playerA, message: boardMsg },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: boardMsg },
+    ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: boardMsg })),
   ]
 
   // Send time update to both players and spectators
@@ -114,15 +116,18 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
   if (isDraw) {
     ctx.room.status = "finished"
     const expiresAt = Date.now() + 30000
+    ctx.room.gameEndExpiresAt = expiresAt
     const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt }
     notifications.push(
       { kind: "send" as const, clientId: ctx.room.playerA, message: endMsg },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: endMsg },
+      ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: endMsg })),
       { kind: "broadcastLobby" as const },
     )
   } else if (winner) {
     ctx.room.status = "finished"
     const expiresAt = Date.now() + 30000
+    ctx.room.gameEndExpiresAt = expiresAt
     const wc = winner.winnerColor as "red" | "black"
     const reason = winner.result === "timeout" 
       ? `${wc === "red" ? "Red" : "Black"} wins on time`
@@ -131,6 +136,7 @@ export function handleMove(ctx: RoomActionContext): ActionResult {
     notifications.push(
       { kind: "send" as const, clientId: ctx.room.playerA, message: endMsg },
       { kind: "send" as const, clientId: ctx.room.playerB!, message: endMsg },
+      ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: endMsg })),
       { kind: "broadcastLobby" as const },
     )
   }
@@ -144,10 +150,13 @@ export function handleResign(ctx: RoomActionContext): ActionResult {
   const resignerColor = ctx.room.playerA === ctx.clientId ? ctx.room.colors!.a : ctx.room.colors!.b
   const winnerColor = resignerColor === "red" ? "black" : "red"
   const expiresAt = Date.now() + 30000
+  ctx.room.gameEndExpiresAt = expiresAt
 
+  const endMsg: ServerMessage = { type: "gameEnd" as const, result: "resign" as const, winnerColor, reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`, expiresAt }
   const notifications: Notification[] = [
-    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "gameEnd" as const, result: "resign" as const, winnerColor, reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`, expiresAt } },
-    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "gameEnd" as const, result: "resign" as const, winnerColor, reason: `${winnerColor === "red" ? "Red" : "Black"} wins by resignation`, expiresAt } },
+    { kind: "send" as const, clientId: ctx.room.playerA, message: endMsg },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: endMsg },
+    ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: endMsg })),
     { kind: "broadcastLobby" as const },
   ]
 
@@ -168,10 +177,13 @@ export function handleDrawOffer(ctx: RoomActionContext): ActionResult {
 export function handleDrawAccept(ctx: RoomActionContext): ActionResult {
   ctx.room.status = "finished"
   const expiresAt = Date.now() + 30000
+  ctx.room.gameEndExpiresAt = expiresAt
 
+  const drawEndMsg: ServerMessage = { type: "gameEnd" as const, result: "draw" as const, winnerColor: null, reason: "Game ended — Draw", expiresAt }
   const notifications: Notification[] = [
-    { kind: "send" as const, clientId: ctx.room.playerA, message: { type: "gameEnd" as const, result: "draw" as const, winnerColor: null, reason: "Game ended — Draw", expiresAt } },
-    { kind: "send" as const, clientId: ctx.room.playerB!, message: { type: "gameEnd" as const, result: "draw" as const, winnerColor: null, reason: "Game ended — Draw", expiresAt } },
+    { kind: "send" as const, clientId: ctx.room.playerA, message: drawEndMsg },
+    { kind: "send" as const, clientId: ctx.room.playerB!, message: drawEndMsg },
+    ...ctx.room.spectators.map(s => ({ kind: "send" as const, clientId: s, message: drawEndMsg })),
     { kind: "broadcastLobby" as const },
   ]
 

@@ -207,6 +207,27 @@ function minimax(
   }
 }
 
+/** Check if board is in initial position (no pieces moved yet) */
+function isInitialPosition(board: Board): boolean {
+  return board[0]![0] === "b車" && board[0]![4] === "b將" &&
+         board[9]![0] === "r車" && board[9]![4] === "r帥" &&
+         board[2]![1] === "b砲" && board[7]![1] === "r炮" &&
+         board[3]![0] === "b卒" && board[6]![0] === "r兵"
+}
+
+/** Set of good opening moves [fromRank, fromFile, toRank, toFile] */
+const OPENING_MOVES: Array<[number, number, number, number]> = [
+  [6, 4, 5, 4], // r兵 e5 advance center pawn
+  [7, 1, 4, 1], // r炮 b2 → b5 cannon to center
+  [9, 1, 7, 3], // r馬 a1 → c3 develop horse
+  [7, 7, 4, 7], // r炮 g2 → g5 cannon to center
+  [9, 7, 7, 5], // r馬 g1 → e3 develop horse
+  [9, 0, 8, 1], // r車 a1 → a2 chariot advance
+  [9, 8, 8, 7], // r車 h1 → h2 chariot advance
+  [9, 0, 7, 0], // r車 a1 → a3 chariot advance
+  [9, 8, 7, 8], // r車 h1 → h3 chariot advance
+]
+
 export class BotEngine {
   private difficulty: Difficulty
   private config: DifficultyConfig
@@ -221,6 +242,22 @@ export class BotEngine {
     const moves = getAllMoves(board, color)
 
     if (moves.length === 0) return null
+
+    // First-move optimization: use predefined opening moves for speed
+    if (isInitialPosition(board) && color === "red") {
+      const shuffled = [...OPENING_MOVES].sort(() => Math.random() - 0.5)
+      for (const [fr, ff, tr, tf] of shuffled) {
+        const match = moves.find(m =>
+          m.from.rank === fr && m.from.file === ff && m.to.rank === tr && m.to.file === tf
+        )
+        if (match) return match
+      }
+      // Fallback: random pawn advance from rank 6 to 5
+      const pawnMoves = moves.filter(m => m.from.rank === 6 && m.to.rank === 5)
+      if (pawnMoves.length > 0) {
+        return pawnMoves[Math.floor(Math.random() * pawnMoves.length)]!
+      }
+    }
 
     // Random move chance
     if (Math.random() < this.config.randomChance) {

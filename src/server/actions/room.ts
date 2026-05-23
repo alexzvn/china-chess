@@ -1,4 +1,4 @@
-import { createRoom, getRoom, getLobbyRooms, joinRoom, kickPlayer, leaveRoom, joinAsSpectator, leaveSpectate, getSpectators, becomeSpectator, kickToSpectator, createBotRoom, rooms as allRooms } from "../rooms"
+import { createRoom, getRoom, getLobbyRooms, joinRoom, kickPlayer, leaveRoom, joinAsSpectator, leaveSpectate, getSpectators, becomeSpectator, becomePlayer, kickToSpectator, createBotRoom, rooms as allRooms } from "../rooms"
 import { getClientName } from "../clientNames"
 import type { RoomActionContext, NoRoomActionContext, ActionResult, Notification } from "./types"
 import type { Difficulty } from "../game/bot"
@@ -136,8 +136,32 @@ export function handleJoinAsSpectator(ctx: RoomActionContext): ActionResult {
   const notifications: Notification[] = [
     { kind: "send" as const, clientId: room.playerA, message: payload },
     ...(room.playerB ? [{ kind: "send" as const, clientId: room.playerB, message: payload }] : []),
-    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players, roomStatus: room.status } },
+    { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } },
   ]
+
+  // If game is already in progress, send gameState and board to the spectator
+  if (room.status === "playing" && room.gameState) {
+    notifications.push(
+      { kind: "send" as const, clientId: ctx.clientId, message: { type: "gameStart" as const, yourColor: "red" as const, roomId: ctx.roomId, opponentId: "" } },
+      { kind: "send" as const, clientId: ctx.clientId, message: { type: "boardUpdate" as const, board: room.gameState.board, turn: room.gameState.turn, moveCount: room.gameState.moveCount, lastMove: room.gameState.lastMove, inCheck: false } },
+    )
+    // Send current time
+    if (room.timeA !== undefined && room.timeB !== undefined) {
+      notifications.push(
+        { kind: "send" as const, clientId: ctx.clientId, message: { type: "timeUpdate" as const, timeA: room.timeA, timeB: room.timeB, timeAColor: room.colors!.a } },
+      )
+    }
+  }
+
+  // If game is already finished, send gameEnd so spectator sees the countdown
+  if (room.status === "finished" && room.gameState) {
+    const expiresAt = room.gameEndExpiresAt ?? Date.now() + 30000
+    notifications.push(
+      { kind: "send" as const, clientId: ctx.clientId, message: { type: "gameStart" as const, yourColor: "red" as const, roomId: ctx.roomId, opponentId: "" } },
+      { kind: "send" as const, clientId: ctx.clientId, message: { type: "boardUpdate" as const, board: room.gameState.board, turn: room.gameState.turn, moveCount: room.gameState.moveCount, lastMove: room.gameState.lastMove, inCheck: false } },
+      { kind: "send" as const, clientId: ctx.clientId, message: { type: "gameEnd" as const, result: "checkmate" as const, winnerColor: null, reason: "Game ended", expiresAt } },
+    )
+  }
 
   return { kind: "ok" as const, notifications }
 }
@@ -182,6 +206,31 @@ export function handleBecomeSpectator(ctx: RoomActionContext): ActionResult {
     { kind: "send" as const, clientId: ctx.clientId, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } },
     { kind: "broadcastLobby" as const },
   ]
+  return { kind: "ok" as const, notifications }
+}
+
+export function handleBecomePlayer(ctx: RoomActionContext): ActionResult {
+  try {
+    becomePlayer(ctx.roomId, ctx.clientId)
+  } catch (e) {
+    return { kind: "error", message: (e as Error).message }
+  }
+
+  const room = ctx.room
+  const spectators = getSpectators(ctx.roomId)
+  const players: { clientId: string; ready: boolean; name: string }[] = [
+    { clientId: room.playerA, ready: room.playerAReady, name: getClientName(room.playerA) },
+  ]
+  if (room.playerB) {
+    players.push({ clientId: room.playerB, ready: room.playerBReady, name: getClientName(room.playerB) })
+  }
+
+  const notifications: Notification[] = [
+    { kind: "send" as const, clientId: room.playerA, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } },
+    ...(room.playerB ? [{ kind: "send" as const, clientId: room.playerB, message: { type: "roomUpdate" as const, players, roomStatus: room.status, spectators } }] : []),
+    { kind: "broadcastLobby" as const },
+  ]
+
   return { kind: "ok" as const, notifications }
 }
 
@@ -235,6 +284,7 @@ export const roomActions = {
   joinAsSpectator: handleJoinAsSpectator,
   leaveSpectate: handleLeaveSpectate,
   becomeSpectator: handleBecomeSpectator,
+  becomePlayer: handleBecomePlayer,
   kickToSpectator: handleKickToSpectator,
   createBotRoom: handleCreateBotRoom as any,
 }

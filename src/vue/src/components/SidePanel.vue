@@ -46,6 +46,7 @@ const emit = defineEmits<{
   acceptUndo: []
   declineUndo: []
   becomeSpectator: []
+  becomePlayer: []
   kickToSpectator: []
 }>()
 
@@ -136,6 +137,14 @@ function hasOpponent(): boolean {
             class="w-full mt-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
           >
             Become Spectator
+          </button>
+          <!-- Spectator promotion: become player when room has open slot -->
+          <button
+            v-if="isSpectator && players.length < 2"
+            @click="emit('becomePlayer')"
+            class="w-full mt-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+          >
+            Become Player
           </button>
         </div>
       </div>

@@ -30,6 +30,7 @@ export interface Room {
   moveHistory?: { from: Position; to: Position; captured: string | null }[]
   botDifficulty?: Difficulty
   botClientId?: string
+  gameEndExpiresAt?: number // timestamp when game-over countdown expires
 }
 
 const rooms = new Map<string, Room>()
@@ -449,6 +450,27 @@ export function becomeSpectator(roomId: string, clientId: string): Room {
   // Reset ready states and room status
   room.playerAReady = false
   room.playerBReady = false
+  room.status = "waiting"
+  delete room.gameState
+  delete room.colors
+
+  return room
+}
+
+// Spectator → Player promotion
+export function becomePlayer(roomId: string, clientId: string): Room {
+  const room = rooms.get(roomId)
+  if (!room) throw new Error("Room not found")
+  if (room.playerA === clientId || room.playerB === clientId) throw new Error("Client is already a player")
+  if (room.status === "playing") throw new Error("Cannot join during active game")
+  if (room.playerB) throw new Error("Room is full")
+  if (!room.spectators.includes(clientId)) throw new Error("Client is not a spectator in this room")
+
+  // Remove from spectators and set as playerB
+  room.spectators = room.spectators.filter(id => id !== clientId)
+  room.playerB = clientId
+  room.playerBReady = false
+  room.playerAReady = false
   room.status = "waiting"
   delete room.gameState
   delete room.colors

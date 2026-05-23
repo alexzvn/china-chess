@@ -151,7 +151,7 @@ function handleChat(myClientId: string, data: Record<string, unknown>) {
       ? room.colors.a
       : isPlayerB && room.colors
         ? room.colors.b
-        : "red" // fallback for pre-game where colors aren't assigned yet
+        : "spectator" // fallback for pre-game where colors aren't assigned yet
   const chatMsg = {
     type: "chat",
     message: {
@@ -250,6 +250,8 @@ function scheduleBotMove(roomId: string) {
       }
 
       sendToClient(verifyRoom.playerA, boardMsg)
+      // Also send board update to spectators
+      verifyRoom.spectators?.forEach(s => sendToClient(s, boardMsg as any))
 
       // Send time update
       const timeUpdate = getTimeUpdate(roomId)
@@ -261,6 +263,7 @@ function scheduleBotMove(roomId: string) {
           timeAColor: verifyRoom.colors!.a,
         }
         sendToClient(verifyRoom.playerA, timeMsg)
+        verifyRoom.spectators?.forEach(s => sendToClient(s, timeMsg as any))
       }
 
       // Check for game end
@@ -276,14 +279,18 @@ function scheduleBotMove(roomId: string) {
 
       if (isDraw) {
         verifyRoom.status = "finished"
+        verifyRoom.gameEndExpiresAt = Date.now() + 30000
         const endMsg: ServerMessage = { type: "gameEnd", result: "draw", winnerColor: null, reason: "Game ended — Draw", expiresAt: Date.now() + 30000 }
         sendToClient(verifyRoom.playerA, endMsg)
+        verifyRoom.spectators?.forEach(s => sendToClient(s, endMsg as any))
       } else if (winner) {
         verifyRoom.status = "finished"
+        verifyRoom.gameEndExpiresAt = Date.now() + 30000
         const wc = winner.winnerColor as "red" | "black"
         const reason = `${wc === "red" ? "Red" : "Black"} wins by ${winner.result}`
         const endMsg: ServerMessage = { type: "gameEnd", result: winner.result, winnerColor: wc, reason, expiresAt: Date.now() + 30000 }
         sendToClient(verifyRoom.playerA, endMsg)
+        verifyRoom.spectators?.forEach(s => sendToClient(s, endMsg as any))
       }
 
       // Schedule next bot move if game continues (but only if it's still bot's turn)
@@ -470,6 +477,21 @@ export function createApp() {
           const room = getRoom(roomId)
           if (room && isBotRoom(roomId) && room.gameState) {
             scheduleBotMove(roomId)
+          }
+        }
+
+        // Bot scheduling: after creating bot room, schedule bot if it's bot's turn
+        if (action === "createBotRoom" && result.kind === "ok") {
+          // Find the roomId from the roomCreated notification
+          for (const n of result.notifications) {
+            if (n.kind === "send" && n.message.type === "roomCreated") {
+              const roomId = (n.message as { roomId: string }).roomId
+              const room = getRoom(roomId)
+              if (room && isBotRoom(roomId) && room.gameState) {
+                scheduleBotMove(roomId)
+              }
+              break
+            }
           }
         }
       },

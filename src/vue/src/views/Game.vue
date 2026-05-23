@@ -85,6 +85,10 @@ const { clientId, status, send } = useWebSocket((data) => {
   if (data.type === "roomUpdate") {
     const msg = data as { players: RoomPlayer[]; roomStatus?: string }
     players.value = msg.players
+    // If spectator just became a player, update isSpectator
+    if (isSpectator.value && myClientId.value && msg.players.some(p => p.clientId === myClientId.value)) {
+      isSpectator.value = false
+    }
     // Reset game-over state when room resets to waiting (e.g., after rematch)
     if (msg.roomStatus === "waiting") {
       gameOver.value = false
@@ -341,6 +345,10 @@ function kickToSpectator() {
   send({ action: "kickToSpectator", roomId })
 }
 
+function becomePlayer() {
+  send({ action: "becomePlayer", roomId })
+}
+
 function leaveSpectate() {
   send({ action: "leaveSpectate", roomId })
   router.push("/")
@@ -393,7 +401,7 @@ function confirmForfeit() {
 
             <!-- Game-over overlay on board -->
             <div
-              v-if="gameOver"
+              v-if="gameOver && !isSpectator"
               class="absolute inset-0 bg-black/60 dark:bg-black/70 flex flex-col items-center justify-center rounded-lg z-50 backdrop-blur-sm"
             >
               <p class="text-white text-lg md:text-xl font-bold px-4 text-center">{{ gameResult }}</p>
@@ -408,6 +416,17 @@ function confirmForfeit() {
                   Back to Lobby
                 </button>
               </div>
+            </div>
+            <!-- Game-over overlay for spectators (read-only, no action buttons) -->
+            <div
+              v-if="gameOver && isSpectator"
+              class="absolute inset-0 bg-black/60 dark:bg-black/70 flex flex-col items-center justify-center rounded-lg z-50 backdrop-blur-sm"
+            >
+              <p class="text-white text-lg md:text-xl font-bold px-4 text-center">{{ gameResult }}</p>
+              <div v-if="countdownRemaining > 0" class="mt-2 text-gray-300 text-xs">
+                New game in <span class="font-mono font-bold">{{ String(Math.floor(countdownRemaining / 60)).padStart(2, '0') }}:{{ String(countdownRemaining % 60).padStart(2, '0') }}</span>
+              </div>
+              <p class="text-gray-400 text-xs mt-3">You're spectating</p>
             </div>
           </div>
 
@@ -450,6 +469,7 @@ function confirmForfeit() {
           @accept-undo="acceptUndo"
           @decline-undo="declineUndo"
           @become-spectator="becomeSpectator"
+          @become-player="becomePlayer"
           @kick-to-spectator="kickToSpectator"
         />
       </div>
